@@ -20,9 +20,9 @@ class TestNet(torch.nn.Module):
 
         siste_lag = 10
         self.fc1 = nn.Linear(20, siste_lag)
-        self.fc2 = nn.Linear(5850*siste_lag, 64)  # 5850, as thats the current max edges, TODO fix better way
+        self.fc2 = nn.Linear(5850*siste_lag, 100)  # 5850, as thats the current max edges, TODO fix better way
 
-        self.softmax = nn.Softmax(dim=1)
+        #self.softmax = nn.Softmax(dim=1)
 
 
     def forward(self, input: Meshes):
@@ -59,7 +59,7 @@ class TestNet(torch.nn.Module):
 
         x = self.flatten(x)
         x = self.fc2(x)
-        #x = self.activation(x)
-        x = self.softmax(x)
+        x = self.activation(x)
+        #x = self.softmax(x)
 
         return x

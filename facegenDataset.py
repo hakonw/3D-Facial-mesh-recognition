@@ -19,7 +19,7 @@ class FaceGenDataset(Dataset):
         for root, dirs, filenames in os.walk(root_dir):
             self.folders = sorted(dirs)
             break  # prevent descending into subfolders
-        print(self.folders)
+        #print(self.folders)
 
         self.path_lookup = {}
 
@@ -58,7 +58,7 @@ class FaceGenDataset(Dataset):
         r_verts, r_faces, r_aux = load_obj(paths["regular"], load_textures=False, device=self.device)
         a_verts, a_faces, a_aux = load_obj(paths["alt"], load_textures=False, device=self.device)
 
-        sample = {"regular":(r_verts, r_faces.verts_idx), "alt": (a_verts, a_faces.verts_idx), "idd": paths["idd"]}
+        sample = {"regular": {"verts": r_verts, "verts_idx": r_faces.verts_idx}, "alt": {"verts": a_verts, "verts_idx": a_faces.verts_idx}, "idd": paths["idd"]}
 
         return sample
 
@@ -73,12 +73,12 @@ if __name__ == "__main__":
     dataloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=4, shuffle=True, num_workers=4)
 
     for i_batch, sample_batced in enumerate(dataloader):
-        print(i_batch, sample_batced["regular"][0].shape)
+        print(i_batch, sample_batced["regular"]["verts"].shape)
 
         from pytorch3d.structures import Meshes
 
         # mesh_face = Meshes(verts=[verts], faces=[faces.verts_idx])
-        mesh = Meshes(verts=sample_batced["regular"][0], faces=sample_batced["regular"][1])
+        mesh = Meshes(verts=sample_batced["regular"]["verts"], faces=sample_batced["regular"]["verts_idx"])
 
         # https://pytorch3d.readthedocs.io/en/latest/modules/structures.html
         # Alt, bruk join_meshes_as_batches
