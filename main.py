@@ -4,7 +4,8 @@ from pytorch3d.io import load_ply, load_objs_as_meshes, load_obj
 import model
 from tqdm import tqdm
 from facegenDataset import FaceGenDataset
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, random_split
+from evaluation import Evaluation
 
 from pytorch3d.structures import Meshes
 
@@ -93,10 +94,15 @@ optimizer = torch.optim.SGD(model.parameters(), lr=1e-3)
 losses = {}
 epochs = 10
 batch_size = 4
+batch_iter_size = 80/batch_size  # TODO move to use len facegendataset
 
 faceGenDataset = FaceGenDataset(device="cpu") # Must load it into cpu memory atm, see Multi-process data loading https://pytorch.org/docs/stable/data.html
+lengths = [int(len(faceGenDataset)*0.8), int(len(faceGenDataset)*0.2)]
+dataset_train, dataset_val = random_split(faceGenDataset, lengths)
+evaluator = Evaluation(dataset=dataset_val, margin=1.0, device=device)
 print("Dataset loaded")
-dataloader = DataLoader(dataset=faceGenDataset, batch_size=batch_size, shuffle=True, num_workers=4, drop_last=True)
+
+dataloader = DataLoader(dataset=dataset_train, batch_size=batch_size, shuffle=True, num_workers=4, drop_last=True)
 print("Dataloader ready")
 
 print("Starting")
@@ -132,13 +138,15 @@ for epoch in range(epochs):
 
         loss = criterion(y_pos, y_anchor, y_negative)
 
-        if i_batch % 25 == 0:
-            losses[(epoch*25) + i_batch] = loss.item()
+        if i_batch % batch_iter_size == 0:
+            losses[(epoch*batch_iter_size) + i_batch] = loss.item()
             tq.set_postfix(loss=loss.item())
 
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
+
+    evaluator(model=model)
 
 print(losses)
 import matplotlib.pylab as plt

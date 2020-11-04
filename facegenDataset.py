@@ -5,10 +5,11 @@ from pytorch3d.io import load_obj
 
 # https://pytorch.org/tutorials/beginner/data_loading_tutorial.html
 class FaceGenDataset(Dataset):
-    def __init__(self, device, root_dir="/lhome/haakowar/Downloads/FaceGen_DB/"):
+    def __init__(self, root_dir="/lhome/haakowar/Downloads/FaceGen_DB/", device="cpu"):
         """
         Args:
-            root_dir (string).
+            root_dir (string)
+            device (device)
         """
         self.device = device
         self.root_dir = root_dir
