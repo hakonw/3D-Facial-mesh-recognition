@@ -1,0 +1,7 @@
+notes.txt
+*.ply
+*.bmp
+*.obj
+
+.idea/
+__pycache__/
