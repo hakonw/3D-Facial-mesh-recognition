@@ -65,8 +65,8 @@ model = model.to(device)  # a must
 
 # Loss & optimizer
 # criterion = torch.nn.MSELoss(reduction='sum')
-criterion = torch.nn.CrossEntropyLoss()
-#criterion = torch.nn.MSELoss(reduction='sum')
+# criterion = torch.nn.CrossEntropyLoss()
+criterion = torch.nn.TripletMarginLoss(margin=1.0)
 optimizer = torch.optim.SGD(model.parameters(), lr=1e-3)
 
 # Mess debug info
@@ -92,10 +92,11 @@ optimizer = torch.optim.SGD(model.parameters(), lr=1e-3)
 
 losses = {}
 epochs = 10
+batch_size = 4
 
 faceGenDataset = FaceGenDataset(device="cpu") # Must load it into cpu memory atm, see Multi-process data loading https://pytorch.org/docs/stable/data.html
 print("Dataset loaded")
-dataloader = DataLoader(dataset=faceGenDataset, batch_size=4, shuffle=True, num_workers=4, drop_last=True)
+dataloader = DataLoader(dataset=faceGenDataset, batch_size=batch_size, shuffle=True, num_workers=4, drop_last=True)
 print("Dataloader ready")
 
 print("Starting")
@@ -122,12 +123,14 @@ for epoch in range(epochs):
         meshes = Meshes(verts=verts, faces=verts_idx)
         meshes.to(device)
 
-        y_hat_py = [int(i)-1 for i in sample_batced["idd"] + sample_batced["idd"]]
-        y_hat = torch.tensor(y_hat_py, dtype=torch.long, device=device)
-
         y_pred = model(meshes)
-        # print("y_pred", y_pred.shape)
-        loss = criterion(y_pred, y_hat)
+
+        y_pos = y_pred[0].repeat((batch_size*2)-2, 1)
+        y_anchor = y_pred[batch_size].repeat((batch_size*2)-2, 1)
+        y_negative = torch.cat([y_pred[1:batch_size], y_pred[batch_size+1:]], dim=0)
+        #assert torch.all(torch.eq(y_pos[1], y_pos[2]))
+
+        loss = criterion(y_pos, y_anchor, y_negative)
 
         if i_batch % 25 == 0:
             losses[(epoch*25) + i_batch] = loss.item()
