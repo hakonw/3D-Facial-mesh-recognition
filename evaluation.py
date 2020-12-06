@@ -82,4 +82,31 @@ class Evaluation():
         print(f"  Precision: {precision}\n  Recall:    {recall}\n  Accuracy:  {accuracy}")
         print(f"  tp:{tp}, fp:{fp}, tn:{tn}, fn:{fn}")
 
+        rank1_true_amount = 0
+        rank1_false_amount = 0
 
+        for anchor_self_id, anchor_prediction in descriptor_dict.items():
+            anchor_id = anchor_prediction["id"]
+            anchor_desc = anchor_prediction["descriptor"]
+
+            best_id = -1  # default value
+            best_dist = 10000000  # Inf ish
+
+            for sample_self_id, sample_prediction in descriptor_dict.items():
+                sample_id = sample_prediction["id"]
+                sample_desc = sample_prediction["descriptor"]
+
+                if anchor_self_id == sample_self_id:  # Checking against itself, skip
+                    continue
+                else:
+                    d = Evaluation.distance(anchor_desc, sample_desc)
+                    if d < best_dist:
+                        best_dist = d
+                        best_id = sample_id  # Model id, not self id
+            if anchor_id == best_id:
+                rank1_true_amount += 1
+            else:
+                rank1_false_amount += 1
+        print("Rank 1 evaul")
+        rank1_acc = rank1_true_amount/(rank1_false_amount+rank1_true_amount)
+        print(f"  true: {rank1_true_amount}, false: {rank1_false_amount}, rank1acc: {rank1_acc}")
