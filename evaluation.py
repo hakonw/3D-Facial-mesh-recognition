@@ -7,9 +7,9 @@ class Evaluation():
         #self.dataset = dataset
         self.margin = margin
         self.device = device
-
+        self.batch_size=10
         self.dataloader = torch.utils.data.DataLoader(dataset=dataset,
-                                                      batch_size=10,
+                                                      batch_size=self.batch_size,
                                                       shuffle=False,
                                                       num_workers=4,
                                                       drop_last=False)
@@ -18,7 +18,7 @@ class Evaluation():
     def distance(descriptor1, descriptor2):
         return torch.dist(descriptor1, descriptor2, p=2)  # TODO validate that euclidian is p-norm=2
 
-    def __call__(self, model):
+    def __call__(self, model, n_vs_nn=False):
         # Structure the dataset:
 
         descriptor_dict = {}
@@ -43,13 +43,15 @@ class Evaluation():
             y_pred = model(meshes)
 
             for i in range(len(y_pred)):
-                descriptor_dict[eval_index] = {"descriptor":y_pred[i], "id":y_id[i]}
+                descriptor_dict[eval_index] = {"descriptor":y_pred[i], "id":y_id[i], "reg": i<self.batch_size}
                 eval_index += 1
 
         tp = 0
         fp = 0
         tn = 0
         fn = 0
+
+        models_done = []
 
         # Test everyone vs everyone
         for model1_id, id1_prediction in descriptor_dict.items():
@@ -58,6 +60,15 @@ class Evaluation():
                 id2 = id2_prediction["id"]
                 desc1 = id1_prediction["descriptor"]
                 desc2 = id2_prediction["descriptor"]
+
+                # Skip duplicate results
+                if model2_id in models_done:
+                    continue
+
+                if n_vs_nn:
+                    # Restrict gal to be reg, probe to be alt
+                    if not (id1_prediction["reg"] and not id2_prediction["reg"]):
+                         continue
 
                 if model1_id == model2_id:  # No need to check model
                     continue
@@ -75,19 +86,28 @@ class Evaluation():
                             fp += 1  # Bad
                         else:
                             tn += 1  # Good
-        precision = tp/(tp+fp)
-        recall = tp/(tp+fn)
+            # For each model1
+            models_done.append(model1_id)
+
+        precision = tp/(tp+fp)  # also called positive predictive value
+        recall = tp/(tp+fn)  # also called true positive rate or 1 - false neg rate
         accuracy = (tp+tn)/(tp+tn+fp+fn) # TODO imbalanced?
         print("Evaluation")
         print(f"  Precision: {precision}\n  Recall:    {recall}\n  Accuracy:  {accuracy}")
+        print(f"  (false neg rate)FRR false reject: {fn/(fn+tp)}, (false pos rate)FAR false accept: {fp/(fp+tn)}")
         print(f"  tp:{tp}, fp:{fp}, tn:{tn}, fn:{fn}")
 
         rank1_true_amount = 0
         rank1_false_amount = 0
 
+        # For each probe, in for each img in gallery
         for anchor_self_id, anchor_prediction in descriptor_dict.items():
             anchor_id = anchor_prediction["id"]
             anchor_desc = anchor_prediction["descriptor"]
+
+            if n_vs_nn:
+                if anchor_prediction["reg"]:  # If probe is reg, slip it
+                    continue
 
             best_id = -1  # default value
             best_dist = 10000000  # Inf ish
@@ -95,6 +115,10 @@ class Evaluation():
             for sample_self_id, sample_prediction in descriptor_dict.items():
                 sample_id = sample_prediction["id"]
                 sample_desc = sample_prediction["descriptor"]
+
+                if n_vs_nn:
+                    if not sample_prediction["reg"]:  # If gal is alt (non-reg) , slip it
+                        continue
 
                 if anchor_self_id == sample_self_id:  # Checking against itself, skip
                     continue
