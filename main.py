@@ -36,22 +36,24 @@ model = model.to(device)  # a must
 # Loss & optimizer
 # criterion = torch.nn.MSELoss(reduction='sum')
 # criterion = torch.nn.CrossEntropyLoss()
-criterion = torch.nn.TripletMarginLoss(margin=1.0, p=2)  # https://pytorch.org/docs/stable/generated/torch.nn.TripletMarginLoss.html#torch.nn.TripletMarginLoss
+criterion = torch.nn.TripletMarginLoss(margin=1.0, p=2, reduction="mean") # https://pytorch.org/docs/stable/generated/torch.nn.TripletMarginLoss.html#torch.nn.TripletMarginLoss   mean or sum reduction possible
 optimizer = torch.optim.SGD(model.parameters(), lr=1e-3)
 
 
-losses = {}
+
 epochs = 20
 batch_size = 4
-batch_iter_size = 80/batch_size  # TODO move to use len facegendataset
+split = (0.6, 0.4)
+train_dataset_size = 100*split[0]
+batch_iter_update = (train_dataset_size/batch_size)/8  # Update 8 times per epoch
 
 # Get the FaceGen dataset
 faceGenDataset = FaceGenDataset(device="cpu")  # Must load it into cpu memory atm, see Multi-process data loading https://pytorch.org/docs/stable/data.html # TODO load the entire dataset into ram?
 
 # Split into train and val
-lengths = [int(len(faceGenDataset)*0.6), int(len(faceGenDataset)*0.4)]
+lengths = [int(len(faceGenDataset)*split[0]), int(len(faceGenDataset)*split[1])]
 dataset_train, dataset_val = random_split(faceGenDataset, lengths)
-print("Dataset loaded")
+print(f"Dataset loaded, split: {split[0]}/{split[1]}")
 
 # Create an evaluator to validate accuracy
 evaluator = Evaluation(dataset=dataset_val, margin=1.0, device=device)
@@ -60,11 +62,15 @@ evaluator = Evaluation(dataset=dataset_val, margin=1.0, device=device)
 dataloader = DataLoader(dataset=dataset_train, batch_size=batch_size, shuffle=True, num_workers=4, drop_last=True, persistent_workers=True)
 print("Dataloader ready")
 
-
+losses = {}
+losses_avg = {}
 try:
-
     print("Starting")
+    iter = 0  # number_of_samples / batch_size per epoch
     for epoch in range(epochs):
+
+        running_loss = 0
+        loss_samples = 0
 
         tq = tqdm(enumerate(dataloader), desc=f"Epoch {epoch}/{epochs}")
         for i_batch, sample_batced in tq:
@@ -96,13 +102,24 @@ try:
 
             loss = criterion(y_pos, y_anchor, y_negative)
 
-            if i_batch % batch_iter_size == 0:
-                losses[(epoch*batch_iter_size) + i_batch] = loss.item()
-                tq.set_postfix(loss=loss.item())
+            running_loss += loss.item()
+            loss_samples += 1
+            iter += 1  # +1 before check, as the last element in the list should have the correct loss
+            losses[iter] = loss.item()
+            # batch_iter_size * i_batch + total*epoch/batch ?
+            if iter % batch_iter_update == 0:
+                tq.set_postfix(loss=loss.item(), avg_loss=running_loss/loss_samples)
+
+
 
             optimizer.zero_grad()
+            #a = list(model.parameters())[0].clone()
             loss.backward()
             optimizer.step()
+            #print(list(model.parameters())[0].grad)
+            #b = list(model.parameters())[0].clone()
+            #print(torch.equal(a.data, b.data))
+        losses_avg[epoch] = running_loss/loss_samples
 
         #evaluator(model=model)
 except KeyboardInterrupt:
@@ -112,12 +129,24 @@ except KeyboardInterrupt:
     sys.exit()
 
 evaluator(model=model)
-print(losses)
+print("Evaluating n_vs_nn")
+evaluator(model=model, n_vs_nn=True)
+#print(losses)
 import matplotlib.pylab as plt
-plt.plot(*zip(*sorted(losses.items())))
+plt.xlabel("Iteration")
+plt.ylabel("Loss")
+plt.ylim(-0.1, 2)
+plt.plot(*zip(*sorted(losses.items())), label="Loss")
 plt.show()
+plt.savefig("loss.png")
+plt.close()
 
-
+plt.xlabel("Epoch")
+plt.ylabel("Average loss")
+plt.ylim(-0.1, 1.25)
+plt.plot(*zip(*sorted(losses_avg.items())), label="Average loss")
+plt.show()
+plt.savefig("loss-avg.png")
 
 
 if __name__ == "__main__":
