@@ -1,6 +1,7 @@
 *.ply
 *.bmp
 *.obj
+*.p
 
 .idea/
 __pycache__/

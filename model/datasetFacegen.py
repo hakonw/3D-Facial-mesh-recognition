@@ -2,7 +2,7 @@ import os.path
 from glob import glob
 
 # from torch_geometric.io import read_obj  # replaced with modified
-from read_obj import read_obj
+from utils import read_obj
 from torch.utils.data import Dataset
 #import numpy as np
 import random
@@ -50,6 +50,9 @@ class FaceGenDatasetHelper:
         return self.dataset
 
 
+# Possibly switch over to pytorch-gemoetric dataset
+# https://pytorch-geometric.readthedocs.io/en/latest/notes/introduction.html#data-transforms
+# Eks: transform=T.RandomTranslate(0.01)
 class FaceGenDataset(Dataset):
     def __init__(self, dataset_cache: dict):
         self.dataset_cache = dataset_cache
@@ -77,6 +80,7 @@ if __name__ == "__main__":
     #import torch
     #dataloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=4, shuffle=False, num_workers=1)
     from torch_geometric.data import DataLoader
+    import torch_geometric
     dataloader = DataLoader(dataset=dataset, batch_size=2, shuffle=False, num_workers=1)
 
     # Single: Data(               face=[4, 5790],  pos=[5850, 3])
@@ -84,8 +88,14 @@ if __name__ == "__main__":
 
     import torch_geometric
     for i_batch, sample_batced in enumerate(dataloader):
-        print(i_batch, sample_batced)
-        print(len(sample_batced))
-        print(sample_batced[0].to_data_list())
-        #torch_geometric.utils.to_dense_adj(sample_batced)
+        print("pre", i_batch, sample_batced)
+        print("length of batch", len(sample_batced))
+        print("sample list", sample_batced[0].to_data_list())
+        data = sample_batced[0].to_data_list()[0]
+        print("data", data)
+        print("data face", data.face)
+        #print(torch_geometric.utils.geodesic_distance(data.pos, data.face))
+        face_to_edge = torch_geometric.transforms.FaceToEdge(remove_faces=True)
+        print("edge data", face_to_edge(data))
+
         break
