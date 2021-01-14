@@ -1,1 +1,1 @@
-conda activate pytorch3d_new
+conda activate pytorch-geometric
