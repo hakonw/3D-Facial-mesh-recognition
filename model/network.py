@@ -1,5 +1,5 @@
 import torch
-from torch_geometric.nn import TopKPooling, GENConv, TopKPooling
+from torch_geometric.nn import TopKPooling, GCNConv, TopKPooling
 from torch import nn
 
 torch.manual_seed(1)
@@ -16,9 +16,9 @@ class TestNet(torch.nn.Module):
 
         self.activation = nn.LeakyReLU()
 
-        self.conv1 = GENConv(in_channels=self.in_channels, out_channels=16)
-        self.conv2 = GENConv(in_channels=16, out_channels=32)
-        self.conv3 = GENConv(in_channels=32, out_channels=64)
+        self.conv1 = GCNConv(in_channels=3, out_channels=16)
+        self.conv2 = GCNConv(in_channels=16, out_channels=32)
+        self.conv3 = GCNConv(in_channels=32, out_channels=64)
 
         self.pooling1 = TopKPooling(in_channels=16, ratio=512)
         self.pooling2 = TopKPooling(in_channels=64, ratio=128)

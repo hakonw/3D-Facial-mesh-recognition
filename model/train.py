@@ -53,7 +53,7 @@ model = model.to(device)
 # Loss & optimizer
 print("Loading criterion and optimizer")
 criterion = torch.nn.TripletMarginLoss(margin=1.0, p=2, reduction="mean")  # https://pytorch.org/docs/stable/generated/torch.nn.TripletMarginLoss.html#torch.nn.TripletMarginLoss   mean or sum reduction possible
-optimizer = torch.optim.SGD(model.parameters(), lr=1e-3)
+optimizer = torch.optim.SGD(model.parameters(), lr=5e-4)
 
 print("Loading Dataset")
 facegen_helper = datasetFacegen.FaceGenDatasetHelper()
