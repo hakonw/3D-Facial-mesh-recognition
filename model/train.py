@@ -41,7 +41,7 @@ print("Beginning", run_name)
 
 
 # Values
-epochs = 20
+epochs = 40
 batch_size = 10
 
 
@@ -90,9 +90,9 @@ for epoch in range(epochs):
         iter += 1
         losses.append(loss.item())
         writer.add_scalar('Loss/train', loss.item(), iter)
-        # writer.add_scalar('Descriptors/train', len(anchors), iter)
+        writer.add_scalar('Pairs/train', len(anchors), iter)
         if iter % 5 == 0:
-            tq.set_postfix(avg_loss=sum(losses)/max(len(losses), 1))
+            tq.set_postfix(avg_loss=sum(losses)/max(len(losses), 1), pairs=len(anchors))
 
         optimizer.zero_grad()
         loss.backward()

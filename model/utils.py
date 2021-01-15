@@ -52,7 +52,7 @@ def read_obj(in_file, triangulation=True):
 def euclidean_distance(descriptor1, descriptor2):
     return torch.dist(descriptor1, descriptor2, p=2)
 
-def findpairs(pairs, req_distance=1.0):
+def findpairs(pairs, req_distance=1.0, accept_all=True):
     assert len(pairs) > 1
     valid_triplets = []
 
@@ -68,15 +68,16 @@ def findpairs(pairs, req_distance=1.0):
                             min_dist = dist
                             best_pair = (pair1[0], pair1[1], sample_b)
 
-                if min_dist < req_distance:
+                if min_dist < req_distance or (accept_all and best_pair is not None):
                     valid_triplets.append(best_pair)
 
-    # We should hopefully here have lots of good hard/easy pairs
+    # We should hopefully here have lots of good hard/semi-hard pairs
     # If there are none, create a negative triplet to not crash the loss function
     if len(valid_triplets) == 0:
         anchors = torch.stack([pairs[0][0]])
         positives = torch.stack([pairs[0][1]])
         negatives = torch.stack([pairs[1][0]])
+        print("Filling triplets due to none valid")
         return anchors, positives, negatives
 
     anchors = []
