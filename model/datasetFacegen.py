@@ -9,6 +9,8 @@ from torch.utils.data import Dataset
 import torch_geometric.transforms
 
 random.seed(1)
+import torch
+torch.manual_seed(1)
 
 # In memory cache helper
 class FaceGenDatasetHelper:
@@ -73,8 +75,7 @@ class FaceGenDataset(Dataset):
         assert len(data) >= 2  # Impossible otherwise, need to change strategy then
         random_sample = random.sample(data, 2)  # get 2 random samples
         assert random_sample[0] != random_sample[1]
-        #return {"a": random_sample[0], "b": random_sample[1]}
-        return random_sample
+        return (random_sample[0].clone(), random_sample[1].clone())
 
 
 # simple test
