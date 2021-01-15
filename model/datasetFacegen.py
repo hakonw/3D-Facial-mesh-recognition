@@ -1,16 +1,19 @@
 import os.path
 from glob import glob
+import random
+import pickle
 
 # from torch_geometric.io import read_obj  # replaced with modified
 from utils import read_obj
 from torch.utils.data import Dataset
-#import numpy as np
-import random
-import pickle
+import torch_geometric.transforms
+
+random.seed(1)
 
 # In memory cache helper
 class FaceGenDatasetHelper:
-    def __init__(self, root="/lhome/haakowar/Downloads/FaceGen_DB/", pickled=True):
+    def __init__(self, root="/lhome/haakowar/Downloads/FaceGen_DB/", pickled=True, face_to_edge=True):
+        _face_to_edge_transformator = torch_geometric.transforms.FaceToEdge(remove_faces=True)
         self.dataset = {}
 
         if pickled:
@@ -37,7 +40,10 @@ class FaceGenDatasetHelper:
 
             data = []
             for file_path in file_paths:
-                data.append(read_obj(file_path))
+                obj_file = read_obj(file_path)
+                if face_to_edge:
+                    obj_file = _face_to_edge_transformator(obj_file) # Replace faces with edges
+                data.append(obj_file)
 
             self.dataset[folder] = data
 
@@ -93,9 +99,9 @@ if __name__ == "__main__":
         print("sample list", sample_batced[0].to_data_list())
         data = sample_batced[0].to_data_list()[0]
         print("data", data)
-        print("data face", data.face)
+        print("data-face:", data.face)
         #print(torch_geometric.utils.geodesic_distance(data.pos, data.face))
-        face_to_edge = torch_geometric.transforms.FaceToEdge(remove_faces=True)
-        print("edge data", face_to_edge(data))
+        #face_to_edge = torch_geometric.transforms.FaceToEdge(remove_faces=True)
+        #print("edge data", face_to_edge(data))
 
         break
