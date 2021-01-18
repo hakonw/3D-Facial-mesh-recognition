@@ -1,9 +1,8 @@
 import torch
 from tqdm import tqdm
-import network
+
 import datasetFacegen
 from torch_geometric.data import DataLoader
-from torch.utils.tensorboard import SummaryWriter
 import utils
 
 torch.manual_seed(1)
@@ -25,46 +24,33 @@ else:
 print("Cuda:", torch.cuda.is_available())
 print("Type:", device.type)
 
-# https://pytorch.org/docs/stable/tensorboard.html
-import os
-try:
-    previous_runs = os.listdir('log/')
-    if len(previous_runs) == 0:
-        run_number = 1
-    else:
-        run_number = max([int(s.split('run_')[1]) for s in previous_runs]) + 1
-except FileNotFoundError:
-    run_number = 0
-run_name = f"run_{run_number:03}"
-writer = SummaryWriter(log_dir=os.path.join("log", run_name), max_queue=20)
-print("Beginning", run_name)
 
 
 # Values
-epochs = 40
-batch_size = 10
+from setup import Config as cfg
 
+writer = cfg.WRITER
 
 # Actual code
 print("Loading model")
-model = network.TestNet()
+model = cfg.MODEL
 model = model.to(device)
 
 # Loss & optimizer
 print("Loading criterion and optimizer")
-criterion = torch.nn.TripletMarginLoss(margin=1.0, p=2, reduction="mean")  # https://pytorch.org/docs/stable/generated/torch.nn.TripletMarginLoss.html#torch.nn.TripletMarginLoss   mean or sum reduction possible
-optimizer = torch.optim.SGD(model.parameters(), lr=5e-4)
+criterion = torch.nn.TripletMarginLoss(margin=cfg.MARGIN, p=cfg.P, reduction=cfg.REDUCTION)  # https://pytorch.org/docs/stable/generated/torch.nn.TripletMarginLoss.html#torch.nn.TripletMarginLoss   mean or sum reduction possible
+optimizer = torch.optim.SGD(model.parameters(), lr=cfg.LR)
 
 print("Loading Dataset")
-facegen_helper = datasetFacegen.FaceGenDatasetHelper()
+facegen_helper = datasetFacegen.FaceGenDatasetHelper(root=cfg.DATASET_PATH, pickled=cfg.DATASET_SAVE, face_to_edge=cfg.DATASET_EDGE)
 facegen_dataset = datasetFacegen.FaceGenDataset(facegen_helper.get_cached_dataset())
 print("Loading DataLoader")
-dataloader = DataLoader(dataset=facegen_dataset, batch_size=batch_size, shuffle=True, num_workers=2)
+dataloader = DataLoader(dataset=facegen_dataset, batch_size=cfg.BATCH_SIZE, shuffle=True, num_workers=cfg.NUM_WORKERS)
 
 print("Staring")
 iter = 0
-for epoch in range(epochs):
-    tq = tqdm(enumerate(dataloader), desc=f"Epoch {epoch}/{epochs}")
+for epoch in range(cfg.EPOCHS):
+    tq = tqdm(enumerate(dataloader), desc=f"Epoch {epoch}/{cfg.EPOCHS}")
 
     losses = []
     for i_batch, sample_batched in tq:
@@ -103,4 +89,4 @@ for epoch in range(epochs):
 
 
 # Close tensorboard
-#writer.close()
+writer.close()
