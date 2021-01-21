@@ -52,24 +52,41 @@ def read_obj(in_file, triangulation=True):
 def euclidean_distance(descriptor1, descriptor2):
     return torch.dist(descriptor1, descriptor2, p=2)
 
-def findpairs(pairs, req_distance=1.0, accept_all=True):
+def triplet_loss(margin, anchor, pos, neg):
+    return max(euclidean_distance(anchor, pos) - euclidean_distance(anchor, neg) + margin, 0)
+
+def findpairs(pairs, req_distance=1.0):
     assert len(pairs) > 1
     valid_triplets = []
 
-    for i, pair1 in enumerate(pairs):
-        for j, pair2 in enumerate(pairs):
-            if i != j:  # Make sure not to match equal pairs
-                min_dist = 1000000  # "Inf"
-                best_pair = None
-                for sample_a in pair1:
-                    for sample_b in pair2:
-                        dist = euclidean_distance(sample_a, sample_b)
-                        if dist < min_dist:
-                            min_dist = dist
-                            best_pair = (pair1[0], pair1[1], sample_b)
+    # Goal: Find the triplet where a neg is closer to an anchor than a pos, with min/max distance
+    # Solution, only find hard triplets atm, dont care about maximizing hard triplets
+    #  Also allow for semi-hard
+    # THIS SHOULD BE DONE WITH A MASK AND PYTORCH, instead of this massive n^2 * m^3   ish behaviour
 
-                if min_dist < req_distance or (accept_all and best_pair is not None):
-                    valid_triplets.append(best_pair)
+    for i, list1 in enumerate(pairs):
+        for j, list2 in enumerate(pairs):
+            if i != j:  # Dont check same id against each other
+                best_loss = -1  # Higher loss is better for training
+                best_triplet = None
+
+                # Find the best triplet for list1
+                for idx1, list1_element1 in enumerate(list1):
+                    for idx2, list1_element2 in enumerate(list1):
+                        if idx1 != idx2:
+                            # Here, all possible combinations of the pos/neg is created
+                            #   For 2 elements, they are (1,2), (2,1)
+                            #   for 3 elements, they are (1,2,3), (1,3,2), (2,1,3), (2,3,1), (3,1,2), (3,2,1)
+                            #   O(n!) behaviour
+                            # Now check against all possible elements and find the best
+                            for neg_sample in list2:
+                                score = triplet_loss(req_distance, list1_element1, list1_element2, neg_sample)
+                                if score > best_loss:
+                                    best_loss = score
+                                    best_triplet = (list1_element1, list1_element2, neg_sample)
+                if best_triplet is not None:
+                    valid_triplets.append(best_triplet)
+
 
     # We should hopefully here have lots of good hard/semi-hard pairs
     # If there are none, create a negative triplet to not crash the loss function
