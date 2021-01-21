@@ -25,4 +25,4 @@ This repo also uses the dataset FaceGen, which is not publicly available at the 
 
 The project is tested with Cuda 11.0
 
-To run it, do `python main.py`
+To run it, do `python train.py`

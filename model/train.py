@@ -4,6 +4,9 @@ from tqdm import tqdm
 import datasetFacegen
 from torch_geometric.data import DataLoader
 import utils
+import metrics
+
+import dataclasses
 
 torch.manual_seed(1)
 torch.cuda.manual_seed(1)
@@ -84,8 +87,23 @@ for epoch in range(cfg.EPOCHS):
         loss.backward()
         optimizer.step()
 
+    # Metrics
+    if (epoch + 1) % cfg.EPOCH_PER_METRIC == 0:
+        descriptor_dict = metrics.data_dict_to_descriptor_dict(model=model, device=device, data_dict=facegen_helper.get_cached_dataset(), desc="Evaluation/Test", leave_tqdm=True)
+        metric = metrics.get_metric_all_vs_all(margin=1.0, descriptor_dict=descriptor_dict)
+        metric_dict = dataclasses.asdict(metric)
+        for metric_key in metric_dict.keys():
+            writer.add_scalar("metric-" + metric_key + "/train", metric_dict[metric_key], iter)
+
+
+
+
     writer.add_scalar('AverageEpochLoss/train', sum(losses)/len(losses), epoch)
     writer.flush()
+
+print("Beginning metrics")
+descriptor_dict = metrics.data_dict_to_descriptor_dict(model=model, device=device, data_dict=facegen_helper.get_cached_dataset())
+print(metrics.get_metric_all_vs_all(margin=1.0, descriptor_dict=descriptor_dict))
 
 
 # Close tensorboard

@@ -5,9 +5,11 @@ import network
 
 
 class Config:
-    EPOCHS = 40
+    EPOCHS = 120
     BATCH_SIZE = 10
     NUM_WORKERS = 2
+
+    EPOCH_PER_METRIC = 2
 
     MODEL = network.TestNet()
 
@@ -37,11 +39,12 @@ class Config:
     run_name = f"run_{run_number:03}"
     WRITER = SummaryWriter(log_dir=os.path.join("log", run_name), max_queue=20)
     print("Beginning", run_name)
-    WRITER.add_hparams(
-        {
-            "Epochs": EPOCHS,
-            "Bsize": BATCH_SIZE,
-            "Model": str(MODEL.__class__.__name__),
-            "lr": LR
-         }
-    )
+    # WRITER.add_hparams(
+    #     {  # hparam_dict
+    #         "Epochs": EPOCHS,
+    #         "Bsize": BATCH_SIZE,
+    #         "Model": str(MODEL.__class__.__name__),
+    #         "lr": LR
+    #      },
+    #     {}  # metric_dict
+    # )
