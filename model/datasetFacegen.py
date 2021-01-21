@@ -44,7 +44,7 @@ class FaceGenDatasetHelper:
             for file_path in file_paths:
                 obj_file = read_obj(file_path)
                 if face_to_edge:
-                    obj_file = _face_to_edge_transformator(obj_file) # Replace faces with edges
+                    obj_file = _face_to_edge_transformator(obj_file)  # Replace faces with edges
                 data.append(obj_file)
 
             self.dataset[folder] = data
@@ -73,9 +73,11 @@ class FaceGenDataset(Dataset):
         # Generate a pair of valid positive samples
         data = self.dataset_cache[self.dataset_keys[idx]]
         assert len(data) >= 2  # Impossible otherwise, need to change strategy then
-        random_sample = random.sample(data, 2)  # get 2 random samples
-        assert random_sample[0] != random_sample[1]
-        return (random_sample[0].clone(), random_sample[1].clone())
+        # As there are only 2 scans for each identity, just return them both
+        return [data[0].clone(), data[1].clone()]
+        # random_sample = random.sample(data, 2)  # get 2 random samples
+        # assert random_sample[0] != random_sample[1]
+        # return (random_sample[0].clone(), random_sample[1].clone())
 
 
 # simple test
