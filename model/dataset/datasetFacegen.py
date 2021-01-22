@@ -74,7 +74,11 @@ class FaceGenDataset(Dataset):
         data = self.dataset_cache[self.dataset_keys[idx]]
         assert len(data) >= 2  # Impossible otherwise, need to change strategy then
         # As there are only 2 scans for each identity, just return them both
-        return [data[0].clone(), data[1].clone()]
+        data1 = data[0].clone()
+        data1.__setitem__("id", idx)
+        data2 = data[1].clone()
+        data2.__setitem__("id", idx)
+        return [data1, data2]
         # random_sample = random.sample(data, 2)  # get 2 random samples
         # assert random_sample[0] != random_sample[1]
         # return (random_sample[0].clone(), random_sample[1].clone())

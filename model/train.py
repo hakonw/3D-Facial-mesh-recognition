@@ -1,9 +1,10 @@
 import torch
 from tqdm import tqdm
 
-import datasetFacegen
+import dataset.datasetFacegen as datasetFacegen
 from torch_geometric.data import DataLoader
 import utils
+import tripletutils
 import metrics
 
 import dataclasses
@@ -14,7 +15,7 @@ import numpy as np
 np.random.seed(1)
 import random
 random.seed(1)
-#torch.set_deterministic(True)
+#torch.set_deterministic(True)  # Currently impossible
 
 if torch.cuda.is_available():
     device = torch.device("cuda:0")
@@ -71,7 +72,7 @@ for epoch in range(cfg.EPOCHS):
             desc1 = model(sample_1[i])
             desc2 = model(sample_2[i])
             descritors.append((desc1, desc2))
-        anchors, positives, negatives = utils.findpairs(descritors, accept_all=cfg.ALL_TRIPLETS)
+        anchors, positives, negatives = tripletutils.findtriplets(descritors, accept_all=cfg.ALL_TRIPLETS)
 
         # loss
         loss = criterion(anchors, positives, negatives)
