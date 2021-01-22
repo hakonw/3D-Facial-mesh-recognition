@@ -57,6 +57,7 @@ for epoch in range(cfg.EPOCHS):
 
     losses = []
     for i_batch, sample_batched in tq:
+        optimizer.zero_grad()
 
         sample_batched[0].to(device)
         sample_batched[1].to(device)
@@ -103,6 +104,16 @@ for epoch in range(cfg.EPOCHS):
 print("Beginning metrics")
 descriptor_dict = metrics.data_dict_to_descriptor_dict(model=model, device=device, data_dict=facegen_helper.get_cached_dataset())
 print(metrics.get_metric_all_vs_all(margin=1.0, descriptor_dict=descriptor_dict))
+
+# Create embeddings plot
+labels = []
+features = []
+for id, desc_list in descriptor_dict.items():
+    for desc in desc_list:
+        labels.append(id)
+        features.append(desc)
+embeddigs = torch.stack(features)
+writer.add_embedding(mat=embeddigs, metadata=labels, tag=cfg.run_name)
 
 
 # Close tensorboard
