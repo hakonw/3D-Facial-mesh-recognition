@@ -89,8 +89,9 @@ for epoch in range(cfg.EPOCHS):
 
     # Metrics
     if (epoch + 1) % cfg.EPOCH_PER_METRIC == 0:
-        descriptor_dict = metrics.data_dict_to_descriptor_dict(model=model, device=device, data_dict=facegen_helper.get_cached_dataset(), desc="Evaluation/Test", leave_tqdm=True)
+        descriptor_dict = metrics.data_dict_to_descriptor_dict(model=model, device=device, data_dict=facegen_helper.get_cached_dataset(), desc="Evaluation/Test", leave_tqdm=False)
         metric = metrics.get_metric_all_vs_all(margin=1.0, descriptor_dict=descriptor_dict)
+        print(metric)
         metric_dict = dataclasses.asdict(metric)
         for metric_key in metric_dict.keys():
             writer.add_scalar("metric-" + metric_key + "/train", metric_dict[metric_key], iter)

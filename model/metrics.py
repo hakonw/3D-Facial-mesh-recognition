@@ -56,6 +56,11 @@ class ScoreMetric(BaseMetric):
     FRR: float = None  # (false neg rate) FRR false reject
     FAR: float = None  # (false pos rate) FAR accept rate
 
+    def __str__(self):
+        return f"ScoreMetric(tp={self.tp}, fp={self.fp}, tn={self.tn}, fn={self.fn}, " + \
+               f"acc={self.accuracy:.4f}, recall={self.recall:.4f}, f1={self.f1:.4f}, " + \
+               f"FFR={self.FRR:.4f}, FAR={self.FAR:.4f}"
+
 #
 # Metrics
 #
