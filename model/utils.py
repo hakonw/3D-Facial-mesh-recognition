@@ -55,7 +55,7 @@ def euclidean_distance(descriptor1, descriptor2):
 def triplet_loss(margin, anchor, pos, neg):
     return max(euclidean_distance(anchor, pos) - euclidean_distance(anchor, neg) + margin, 0)
 
-def findpairs(pairs, req_distance=1.0):
+def findpairs(pairs, req_distance=1.0, accept_all=True):
     assert len(pairs) > 1
     valid_triplets = []
 
@@ -67,7 +67,7 @@ def findpairs(pairs, req_distance=1.0):
     for i, list1 in enumerate(pairs):
         for j, list2 in enumerate(pairs):
             if i != j:  # Dont check same id against each other
-                best_loss = -1  # Higher loss is better for training
+                best_loss = -1 if accept_all else 0  # Higher loss is better for training, set to 0 to only include non-zero losses
                 best_triplet = None
 
                 # Find the best triplet for list1

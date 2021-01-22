@@ -148,5 +148,4 @@ def get_metric_all_vs_all(margin: float, descriptor_dict):
 
     return metrics
 
-# BaseMetric(tp=148, fp=6, tn=4944, fn=52)
-# BaseMetric(tp=10, fp=0, tn=19800, fn=90)
+

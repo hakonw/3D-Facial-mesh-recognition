@@ -5,18 +5,19 @@ import network
 
 
 class Config:
-    EPOCHS = 120
+    EPOCHS = 80
     BATCH_SIZE = 10
     NUM_WORKERS = 2
 
-    EPOCH_PER_METRIC = 2
+    EPOCH_PER_METRIC = 4
 
     MODEL = network.TestNet()
 
     # Loss function
     MARGIN = 1.0
     P = 2
-    REDUCTION = "mean"
+    REDUCTION = "mean"  # mean or sum (or other, see pytorch doc)
+    ALL_TRIPLETS = True  # To allow soft triplets (loss=0) & to have a comparable loss, or else have comparable triplets
 
     # Optimizer
     LR = 5e-4

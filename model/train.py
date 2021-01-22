@@ -70,8 +70,7 @@ for epoch in range(cfg.EPOCHS):
             desc1 = model(sample_1[i])
             desc2 = model(sample_2[i])
             descritors.append((desc1, desc2))
-
-        anchors, positives, negatives = utils.findpairs(descritors)
+        anchors, positives, negatives = utils.findpairs(descritors, accept_all=cfg.ALL_TRIPLETS)
 
         # loss
         loss = criterion(anchors, positives, negatives)

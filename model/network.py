@@ -10,9 +10,9 @@ class TestNet(torch.nn.Module):
     def __init__(self):
         super(TestNet, self).__init__()
 
-        self.in_channels = 3
-        self.pool_neck = 512
-        self.amount_descriptors = 512
+        # self.in_channels = 3
+        # self.pool_neck = 512
+        # self.amount_descriptors = 512
 
         self.activation = nn.LeakyReLU()
 
