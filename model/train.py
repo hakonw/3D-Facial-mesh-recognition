@@ -130,14 +130,20 @@ if (cfg.TENSORBOARD_HPARAMS):
             "Epochs": cfg.EPOCHS,
             "Bsize": cfg.BATCH_SIZE,
             "Model": str(cfg.MODEL.__class__.__name__),
-            "lr": cfg.LR
+            "lr": cfg.LR,
+            "Modelsummary": model.short_rep(),
           },
         metric_dict=dataclasses.asdict(final_metrics),
-        run_name=cfg.run_name
+        run_name="hparam"
      )
 
 model_file = open(os.path.join(cfg.log_dir, cfg.run_name, "model.txt"), "x")
 model_file.write(str(model))
+writer.add_text("Model-summary",
+                f"Run: {cfg.run_name}  \n" +
+                f"Result: {str(final_metrics)}  \n" +
+                "## Model  \n" +
+                str(model).replace("\n", "  \n"))
 model_file.close()
 
 

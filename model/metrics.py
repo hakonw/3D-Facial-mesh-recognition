@@ -59,7 +59,7 @@ class ScoreMetric(BaseMetric):
     def __str__(self):
         return f"ScoreMetric(tp={self.tp}, fp={self.fp}, tn={self.tn}, fn={self.fn}, " + \
                f"acc={self.accuracy:.4f}, preci={self.precision:.3f} recall={self.recall:.3f}, f1={self.f1:.3f}, " + \
-               f"FRR={self.FRR:.3f}, FAR={self.FAR:.3f}"
+               f"FRR={self.FRR:.3f}, FAR={self.FAR:.3f})"
 
 #
 # Metrics
