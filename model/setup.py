@@ -13,7 +13,7 @@ class Config:
     EPOCH_PER_METRIC = 4
 
     # Model
-    MODEL = network.PrelimNet()  # TestNet (new) or PrelimNet (old)
+    MODEL = network.TestNet()  # TestNet (new) or PrelimNet (old)
 
     # Loss function
     MARGIN = 1.0
@@ -24,7 +24,7 @@ class Config:
     ALL_TRIPLETS = True  # To allow soft triplets (loss=0) & to have a comparable loss, or else have comparable triplets
 
     # Optimizer
-    LR = 5e-4
+    LR = 1e-4
 
     # Dataset
     NUM_WORKERS = 2  # for the dataloader
