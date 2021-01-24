@@ -6,7 +6,7 @@ import network
 
 class Config:
     # General
-    EPOCHS = 80
+    EPOCHS = 10
     BATCH_SIZE = 10  # Note, currently the triplet selector is n^2 * m^2, or n^2 if n >> m (batch size vs scans per id)
 
     # Metrics
@@ -32,6 +32,10 @@ class Config:
     DATASET_SAVE = True
     DATASET_EDGE = True
 
+    #
+    TENSORBOARD_EMBEDDINGS = False
+    TENSORBOARD_HPARAMS = True
+
     # Logger
     # https://pytorch.org/docs/stable/tensorboard.html
     try:
@@ -45,12 +49,3 @@ class Config:
     run_name = f"run_{run_number:03}"
     WRITER = SummaryWriter(log_dir=os.path.join("log", run_name), max_queue=20)
     print("Beginning", run_name)
-    # WRITER.add_hparams(
-    #     {  # hparam_dict
-    #         "Epochs": EPOCHS,
-    #         "Bsize": BATCH_SIZE,
-    #         "Model": str(MODEL.__class__.__name__),
-    #         "lr": LR
-    #      },
-    #     {}  # metric_dict
-    # )

@@ -58,8 +58,8 @@ class ScoreMetric(BaseMetric):
 
     def __str__(self):
         return f"ScoreMetric(tp={self.tp}, fp={self.fp}, tn={self.tn}, fn={self.fn}, " + \
-               f"acc={self.accuracy:.4f}, recall={self.recall:.4f}, f1={self.f1:.4f}, " + \
-               f"FFR={self.FRR:.4f}, FAR={self.FAR:.4f}"
+               f"acc={self.accuracy:.4f}, preci={self.precision:.3f} recall={self.recall:.3f}, f1={self.f1:.3f}, " + \
+               f"FRR={self.FRR:.3f}, FAR={self.FAR:.3f}"
 
 #
 # Metrics
@@ -139,17 +139,21 @@ def get_metric_all_vs_all(margin: float, descriptor_dict):
     base_metric = get_base_metric_all_vs_all(margin=margin, descriptor_dict=descriptor_dict)
     metrics = ScoreMetric.from_instance(base_metric)  # Inherit from the base metric
 
+    epsilon = 0.000001
+    def nonzero(maybe_zero):
+        return max(maybe_zero, epsilon)
+
     tp = base_metric.tp
     tn = base_metric.tn
     fp = base_metric.fp
     fn = base_metric.fn
 
     metrics.accuracy = (tp + tn) / (tp + tn + fp + fn)
-    metrics.precision = tp / (tp + fp)
-    metrics.recall = tp / (tp + fn)
-    metrics.f1 = 2 * (metrics.precision * metrics.recall) / (metrics.precision + metrics.recall)
-    metrics.FRR = fn / (fn + tp)
-    metrics.FAR = fp / (fp+tn)
+    metrics.precision = tp / nonzero(tp + fp)
+    metrics.recall = tp / nonzero(tp + fn)
+    metrics.f1 = 2 * (metrics.precision * metrics.recall) / nonzero(metrics.precision + metrics.recall)
+    metrics.FRR = fn / nonzero(fn + tp)
+    metrics.FAR = fp / nonzero(fp + tn)
 
     return metrics
 

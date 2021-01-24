@@ -1,7 +1,7 @@
 import torch
 from tqdm import tqdm
 
-import dataset.datasetFacegen as datasetFacegen
+import datasetFacegen
 from torch_geometric.data import DataLoader
 import utils
 import tripletutils
@@ -105,17 +105,35 @@ for epoch in range(cfg.EPOCHS):
 
 print("Beginning metrics")
 descriptor_dict = metrics.data_dict_to_descriptor_dict(model=model, device=device, data_dict=facegen_helper.get_cached_dataset())
-print(metrics.get_metric_all_vs_all(margin=1.0, descriptor_dict=descriptor_dict))
+final_metrics = metrics.get_metric_all_vs_all(margin=1.0, descriptor_dict=descriptor_dict)
+print(final_metrics)
 
 # Create embeddings plot
-labels = []
-features = []
-for id, desc_list in descriptor_dict.items():
-    for desc in desc_list:
-        labels.append(id)
-        features.append(desc)
-embeddigs = torch.stack(features)
-writer.add_embedding(mat=embeddigs, metadata=labels, tag=cfg.run_name)
+if (cfg.TENSORBOARD_EMBEDDINGS):
+    labels = []
+    features = []
+    for id, desc_list in descriptor_dict.items():
+        for desc in desc_list:
+            labels.append(id)
+            features.append(desc)
+    embeddigs = torch.stack(features)
+    writer.add_embedding(mat=embeddigs, metadata=labels, tag=cfg.run_name)
+
+if (cfg.TENSORBOARD_HPARAMS):
+    metric_dict = dataclasses.asdict(final_metrics)
+    newdict = {}
+    for metric_key in metric_dict.keys():
+        newdict["hparam-" + metric_key + "/train"] = metric_dict[metric_key]
+    writer.add_hparams(
+        hparam_dict={
+            "Epochs": cfg.EPOCHS,
+            "Bsize": cfg.BATCH_SIZE,
+            "Model": str(cfg.MODEL.__class__.__name__),
+            "lr": cfg.LR
+          },
+        metric_dict=dataclasses.asdict(final_metrics),
+        run_name=cfg.run_name
+     )
 
 
 # Close tensorboard

@@ -23,6 +23,8 @@ This repo also uses the dataset FaceGen, which is not publicly available at the 
 
 ## Running
 
-The project is tested with Cuda 11.0
+The project is tested with Cuda 11.0 and pytorch-geometric hash:3e8baf2
 
-To run it, do `python train.py`
+To run it, do `python model/train.py`
+
+Run tensorboard with `tensorboard --logdir=log`
