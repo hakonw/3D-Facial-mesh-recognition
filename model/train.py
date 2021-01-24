@@ -8,6 +8,7 @@ import tripletutils
 import metrics
 
 import dataclasses
+import os
 
 torch.manual_seed(1)
 torch.cuda.manual_seed(1)
@@ -134,6 +135,10 @@ if (cfg.TENSORBOARD_HPARAMS):
         metric_dict=dataclasses.asdict(final_metrics),
         run_name=cfg.run_name
      )
+
+model_file = open(os.path.join(cfg.log_dir, cfg.run_name, "model.txt"), "x")
+model_file.write(str(model))
+model_file.close()
 
 
 # Close tensorboard

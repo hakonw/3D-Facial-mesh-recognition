@@ -6,7 +6,7 @@ import network
 
 class Config:
     # General
-    EPOCHS = 10
+    EPOCHS = 40
     BATCH_SIZE = 10  # Note, currently the triplet selector is n^2 * m^2, or n^2 if n >> m (batch size vs scans per id)
 
     # Metrics
@@ -39,7 +39,8 @@ class Config:
     # Logger
     # https://pytorch.org/docs/stable/tensorboard.html
     try:
-        previous_runs = os.listdir('log/')
+        log_dir = "log/"
+        previous_runs = os.listdir(log_dir)
         if len(previous_runs) == 0:
             run_number = 1
         else:
