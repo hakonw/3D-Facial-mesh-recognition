@@ -7,10 +7,12 @@ from tqdm import tqdm
 # Processing of data before metrics
 #
 
+@torch.no_grad()  # This function disables autograd, so no training can be done on the data
 def single_data_to_descriptor(model, device, data):
     data.to(device)
     # Assuming single data, ergo dont need to do .to_data_list()
     descriptor = model(data)
+    descriptor.to("cpu")  # Results are returned to the cpu, as ASAPooling would use over 12gb memory (because of grad)
     return descriptor
 
 # Assumes dict: ID -> list(Data)
@@ -23,6 +25,7 @@ def data_dict_to_descriptor_dict(model, device, data_dict, desc="Evaluation", le
         for data in data_list:
             desc_list.append(single_data_to_descriptor(model, device, data.clone()))
         descriptor_dict[key] = desc_list
+        #model.to(device)
     return descriptor_dict
 
 
@@ -67,8 +70,8 @@ class ScoreMetric(BaseMetric):
 
 
 def compare_two_unique_desc_lists(margin: float, desc_list1, desc_list2):
-    for i in range(min(len(desc_list1), len(desc_list2))):  # Assert torch.all, torch.eq isnt working, doing it manually
-        assert not torch.all(torch.eq(desc_list1[i], desc_list2[i]))
+    # for i in range(min(len(desc_list1), len(desc_list2))):  # Assert torch.all, torch.eq isnt working, doing it manually
+    #     assert not torch.all(torch.eq(desc_list1[i], desc_list2[i]))
     within_margin = 0
     outside_margin = 0
     for desc1 in desc_list1:

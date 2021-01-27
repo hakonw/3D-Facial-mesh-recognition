@@ -2,11 +2,11 @@ import torch
 import os
 from torch.utils.tensorboard import SummaryWriter
 import network
-
+import datasetFacegen
 
 class Config:
     # General
-    EPOCHS = 40
+    EPOCHS = 20
     BATCH_SIZE = 10  # Note, currently the triplet selector is n^2 * m^2, or n^2 if n >> m (batch size vs scans per id)
 
     # Metrics
@@ -32,21 +32,37 @@ class Config:
     DATASET_SAVE = True
     DATASET_EDGE = True
 
-    #
+    # Facegen Dataset
+    FACEGEN_HELPER = datasetFacegen.FaceGenDatasetHelper(root=DATASET_PATH, pickled=DATASET_SAVE, face_to_edge=DATASET_EDGE)
+
+
+    # Various logger
+    LEAVE_TQDM = True
+    log_dir = "log/"
+
     TENSORBOARD_EMBEDDINGS = False
     TENSORBOARD_HPARAMS = True
+    TENSORBOARD_TEXT = True
+    WRITE_MODEL_SUMMARY = True
 
-    # Logger
-    # https://pytorch.org/docs/stable/tensorboard.html
-    try:
-        log_dir = "log/"
-        previous_runs = os.listdir(log_dir)
-        if len(previous_runs) == 0:
-            run_number = 1
+    def __init__(self, enable_writer=True):
+        # Logger
+        # https://pytorch.org/docs/stable/tensorboard.html
+        if enable_writer:
+            try:
+                previous_runs = os.listdir(Config.log_dir)
+                if len(previous_runs) == 0:
+                    run_number = 1
+                else:
+                    previous_runs = list(filter(lambda x: "run" in x, previous_runs))
+                    run_number = max([int(s.split('run_')[1]) for s in previous_runs]) + 1
+            except FileNotFoundError:
+                print("File not found, defaulting run number")
+                run_number = 0
+            self.run_name = f"run_{run_number:03}"
+            self.WRITER = SummaryWriter(log_dir=os.path.join(Config.log_dir, self.run_name), max_queue=20)
+            print("Beginning", self.run_name)
         else:
-            run_number = max([int(s.split('run_')[1]) for s in previous_runs]) + 1
-    except FileNotFoundError:
-        run_number = 0
-    run_name = f"run_{run_number:03}"
-    WRITER = SummaryWriter(log_dir=os.path.join("log", run_name), max_queue=20)
-    print("Beginning", run_name)
+            import random
+            self.run_name = "No-log-UNKNOWN" + str(random.randint(0, 10000))
+            self.WRITER = None
