@@ -1,10 +1,16 @@
 import os.path
 from glob import glob
 import torch
-from read_wrl import read_wrl
-import torch_geometric.transforms
-from tqdm import tqdm
 import pickle
+from tqdm import tqdm
+
+from torch.utils.data import Dataset
+import torch_geometric.transforms
+
+from read_wrl import read_wrl
+
+torch.manual_seed(1)
+
 
 # Format:
 # F/M ID: F0001, M0001   female or man,
@@ -74,6 +80,51 @@ class BU3DFEDatasetHelper:
         return self.dataset
 
 
+class BU3DFEDataset(Dataset):  # This does not need to be of type Dataset
+    def __init__(self, dataset_cache: dict):
+        self.dataset_cache = dataset_cache
+        self.dataset_keys = list(dataset_cache.keys())
+
+    def __len__(self):
+        return len(self.dataset_keys)
+
+    def __getitem__(self, idx):
+        data = self.dataset_cache[self.dataset_keys[idx]]
+        # Data is a new dict
+        safe_dict = {}
+        for name, d in data.items():
+            safe_dict[name] = d.clone()  # Make sure not to edit the originals
+
+        # TODO generate some filter somhow
+
+        return safe_dict
+
+
+# You can argue that this is stupid
+def list_collate_fn(batch):
+    return batch
+
+
 if __name__ == "__main__":
     path = "/lhome/haakowar/Downloads/BU_3DFE/"
     BU3DFE_helper = BU3DFEDatasetHelper(path)
+
+    dataset = BU3DFEDataset(BU3DFE_helper.get_cached_dataset())
+
+    # Currently, pytorch_geometric overwrites the collate_fn
+    # https://github.com/rusty1s/pytorch_geometric/blob/3e8baf28c86eebbf6da74be36ea3904ec77480b8/torch_geometric/data/dataloader.py#L57
+    # So that's a thing
+
+    # from torch_geometric.data import DataLoader
+    import torch
+    DataLoader = torch.utils.data.DataLoader
+    dataloader = DataLoader(dataset=dataset, batch_size=2, shuffle=False, num_workers=1, collate_fn=list_collate_fn)
+
+    for i_batch, sample_batced in enumerate(dataloader):
+        print("pre", i_batch, sample_batced)
+        print("length of batch", len(sample_batced))
+        print("sample list", sample_batced[0].to_data_list())
+        data = sample_batced[0].to_data_list()[0]
+        print("data", data)
+        print("data-face:", data.face)
+        break
