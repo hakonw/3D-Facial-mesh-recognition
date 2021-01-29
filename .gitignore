@@ -1,8 +1,12 @@
+# 3D files
 *.ply
-*.bmp
 *.obj
+*.wrl
+
+# Pickle files
 *.p
 
+# Folders
 .idea/
 __pycache__/
 log/

@@ -14,8 +14,9 @@ torch.manual_seed(1)
 
 # In memory cache helper
 class FaceGenDatasetHelper:
+    _face_to_edge_transformator = torch_geometric.transforms.FaceToEdge(remove_faces=True)
+
     def __init__(self, root="/lhome/haakowar/Downloads/FaceGen_DB/", pickled=True, face_to_edge=True):
-        _face_to_edge_transformator = torch_geometric.transforms.FaceToEdge(remove_faces=True)
         self.dataset = {}
 
         if pickled:
@@ -23,9 +24,8 @@ class FaceGenDatasetHelper:
                 self.dataset = pickle.load(open("facegen_cache.p", "rb"))
                 print("Pickle loaded")
                 return
-            except:
-                print("Pickle failed, loading data manually")
-                pass
+            except Exception as e:
+                print(f"Pickle failed - {str(e)}, loading data manually")
 
         # Find all sub-folders
         folders = []
@@ -44,14 +44,14 @@ class FaceGenDatasetHelper:
             for file_path in file_paths:
                 obj_file = read_obj(file_path)
                 if face_to_edge:
-                    obj_file = _face_to_edge_transformator(obj_file)  # Replace faces with edges
+                    obj_file = FaceGenDatasetHelper._face_to_edge_transformator(obj_file)  # Replace faces with edges
                 data.append(obj_file)
 
             self.dataset[folder] = data
 
         if pickled:
             print("Saving pickle")
-            pickle.dump(self.dataset, open("facegen_cache.p", "wb"), protocol=-1)
+            pickle.dump(self.dataset, open("facegen_cache.p", "wb"), protocol=pickle.HIGHEST_PROTOCOL)
             print("Pickle saved")
 
     def get_cached_dataset(self):

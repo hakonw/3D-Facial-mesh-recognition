@@ -19,6 +19,7 @@ import re
 # Normals and textures are not collected
 # ONLY TESTED WITH VRML 2.0
 # TODO forces triangulation
+# Note, also a bit slow, possibly due to the regex
 def read_wrl(in_file):
     fp = open(in_file, "r")
     buf = fp.read()
