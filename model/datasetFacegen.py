@@ -4,7 +4,8 @@ import random
 import pickle
 
 # from torch_geometric.io import read_obj  # replaced with modified
-from utils import read_obj
+from read_obj import read_obj
+from utils import list_collate_fn
 from torch.utils.data import Dataset
 import torch_geometric.transforms
 
@@ -74,11 +75,10 @@ class FaceGenDataset(Dataset):
         data = self.dataset_cache[self.dataset_keys[idx]]
         assert len(data) >= 2  # Impossible otherwise, need to change strategy then
         # As there are only 2 scans for each identity, just return them both
-        data1 = data[0].clone()
+        data = [d.clone() for d in data]  # Make sure not to edit the originals
+        return data
         # data1.__setitem__("id", idx)
-        data2 = data[1].clone()
         # data2.__setitem__("id", idx)
-        return [data1, data2]
         # random_sample = random.sample(data, 2)  # get 2 random samples
         # assert random_sample[0] != random_sample[1]
         # return (random_sample[0].clone(), random_sample[1].clone())
@@ -92,9 +92,10 @@ if __name__ == "__main__":
 
     #import torch
     #dataloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=4, shuffle=False, num_workers=1)
-    from torch_geometric.data import DataLoader
-    import torch_geometric
-    dataloader = DataLoader(dataset=dataset, batch_size=2, shuffle=False, num_workers=1)
+    #from torch_geometric.data import DataLoader
+    #import torch_geometric
+    from torch.utils.data import DataLoader
+    dataloader = DataLoader(dataset=dataset, batch_size=2, shuffle=False, num_workers=1, collate_fn=list_collate_fn)
 
     # Single: Data(               face=[4, 5790],  pos=[5850, 3])
     # Double: Data(batch=[11700], face=[4, 11580], pos=[11700, 3])
@@ -103,12 +104,12 @@ if __name__ == "__main__":
     for i_batch, sample_batced in enumerate(dataloader):
         print("pre", i_batch, sample_batced)
         print("length of batch", len(sample_batced))
-        print("sample list", sample_batced[0].to_data_list())
-        data = sample_batced[0].to_data_list()[0]
-        print("data", data)
-        print("data-face:", data.face)
-        #print(torch_geometric.utils.geodesic_distance(data.pos, data.face))
-        #face_to_edge = torch_geometric.transforms.FaceToEdge(remove_faces=True)
-        #print("edge data", face_to_edge(data))
+        # print("sample list", sample_batced[0].to_data_list())
+        # data = sample_batced[0].to_data_list()[0]
+        # print("data", data)
+        # print("data-face:", data.face)
+        # print(torch_geometric.utils.geodesic_distance(data.pos, data.face))
+        # face_to_edge = torch_geometric.transforms.FaceToEdge(remove_faces=True)
+        # print("edge data", face_to_edge(data))
 
         break

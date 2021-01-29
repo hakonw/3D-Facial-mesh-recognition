@@ -2,7 +2,8 @@ import torch
 from tqdm import tqdm
 
 import datasetFacegen
-from torch_geometric.data import DataLoader
+# from torch_geometric.data import DataLoader
+from torch.utils.data import DataLoader
 import utils
 import tripletutils
 import metrics
@@ -44,10 +45,9 @@ def train(cfg: Config):
     criterion = torch.nn.TripletMarginLoss(margin=cfg.MARGIN, p=cfg.P, reduction=cfg.REDUCTION)  # https://pytorch.org/docs/stable/generated/torch.nn.TripletMarginLoss.html#torch.nn.TripletMarginLoss   mean or sum reduction possible
     optimizer = torch.optim.SGD(model.parameters(), lr=cfg.LR)
 
-    print("Loading Dataset")
-    facegen_dataset = datasetFacegen.FaceGenDataset(cfg.FACEGEN_HELPER.get_cached_dataset())
     print("Loading DataLoader")
-    dataloader = DataLoader(dataset=facegen_dataset, batch_size=cfg.BATCH_SIZE, shuffle=True, num_workers=cfg.NUM_WORKERS)
+    # Note custom collate fn
+    dataloader = DataLoader(dataset=cfg.DATASET, batch_size=cfg.BATCH_SIZE, shuffle=True, num_workers=cfg.NUM_WORKERS, collate_fn=utils.list_collate_fn)
 
     print("Staring")
     iter = 0
@@ -55,23 +55,25 @@ def train(cfg: Config):
         tq = tqdm(enumerate(dataloader), desc=f"Epoch {epoch}/{cfg.EPOCHS}", leave=cfg.LEAVE_TQDM)
 
         losses = []
-        for i_batch, sample_batched in tq:
+        for i_batch, batched in tq:
             optimizer.zero_grad()
 
-            sample_batched[0].to(device)
-            sample_batched[1].to(device)
+            # Sample_batched is a list, instead of a pytorch_geometric batched object
+            # This disables batching on the GPU
+            # This is a feature that should be implemented if this code is used fore more than experimenting
 
-            # Sample_batched contains pairs in the format [2, batch_size]
-            sample_1 = sample_batched[0].to_data_list()
-            sample_2 = sample_batched[1].to_data_list()
+            # batched is also a list of variable sized elements, where each list is a separate identity
+
+            # TODO figure out what to do with dict
+            if isinstance(batched, dict):
+                batched = batched.values()
 
             descritors = []
-            for i in range(len(sample_1)):
-                desc1 = model(sample_1[i])
-                desc2 = model(sample_2[i])
-                descritors.append((desc1, desc2))
-            anchors, positives, negatives = tripletutils.findtriplets(descritors, accept_all=cfg.ALL_TRIPLETS)
+            for i in range(len(batched)):
+                ident = [model(d.to(device)) for d in batched[i]]
+                descritors.append(ident)
 
+            anchors, positives, negatives = tripletutils.findtriplets(descritors, accept_all=cfg.ALL_TRIPLETS)
             # loss
             loss = criterion(anchors, positives, negatives)
 
@@ -89,7 +91,7 @@ def train(cfg: Config):
 
         # Metrics
         if (epoch + 1) % cfg.EPOCH_PER_METRIC == 0:
-            descriptor_dict = metrics.data_dict_to_descriptor_dict(model=model, device=device, data_dict=cfg.FACEGEN_HELPER.get_cached_dataset(), desc="Evaluation/Test", leave_tqdm=False)
+            descriptor_dict = metrics.data_dict_to_descriptor_dict(model=model, device=device, data_dict=cfg.DATASET_HELPER.get_cached_dataset(), desc="Evaluation/Test", leave_tqdm=False)
             metric = metrics.get_metric_all_vs_all(margin=1.0, descriptor_dict=descriptor_dict)
             print(metric)
             metric_dict = dataclasses.asdict(metric)
@@ -102,7 +104,7 @@ def train(cfg: Config):
             writer.flush()
 
     print("Beginning metrics")
-    descriptor_dict = metrics.data_dict_to_descriptor_dict(model=model, device=device, data_dict=cfg.FACEGEN_HELPER.get_cached_dataset())
+    descriptor_dict = metrics.data_dict_to_descriptor_dict(model=model, device=device, data_dict=cfg.DATASET_HELPER.get_cached_dataset())
     final_metrics = metrics.get_metric_all_vs_all(margin=1.0, descriptor_dict=descriptor_dict)
     print(final_metrics)
 

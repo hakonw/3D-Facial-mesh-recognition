@@ -8,6 +8,7 @@ from torch.utils.data import Dataset
 import torch_geometric.transforms
 
 from read_wrl import read_wrl
+from utils import list_collate_fn
 
 torch.manual_seed(1)
 
@@ -100,11 +101,6 @@ class BU3DFEDataset(Dataset):  # This does not need to be of type Dataset
         return safe_dict
 
 
-# You can argue that this is stupid
-def list_collate_fn(batch):
-    return batch
-
-
 if __name__ == "__main__":
     path = "/lhome/haakowar/Downloads/BU_3DFE/"
     BU3DFE_helper = BU3DFEDatasetHelper(path)
@@ -116,15 +112,14 @@ if __name__ == "__main__":
     # So that's a thing
 
     # from torch_geometric.data import DataLoader
-    import torch
-    DataLoader = torch.utils.data.DataLoader
+    from torch.utils.data import DataLoader
     dataloader = DataLoader(dataset=dataset, batch_size=2, shuffle=False, num_workers=1, collate_fn=list_collate_fn)
 
     for i_batch, sample_batced in enumerate(dataloader):
         print("pre", i_batch, sample_batced)
         print("length of batch", len(sample_batced))
-        print("sample list", sample_batced[0].to_data_list())
-        data = sample_batced[0].to_data_list()[0]
-        print("data", data)
-        print("data-face:", data.face)
+        # print("sample list", sample_batced[0].to_data_list())
+        # data = sample_batced[0].to_data_list()[0]
+        # print("data", data)
+        # print("data-face:", data.face)
         break
