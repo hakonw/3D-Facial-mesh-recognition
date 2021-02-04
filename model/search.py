@@ -53,7 +53,8 @@ for pool_algo in pool_algos:
         config.WRITE_MODEL_SUMMARY = False
         config.LAVE_TQDM = False
 
-        config.EPOCH_PER_METRIC = 40
+        config.EPOCHS = 30
+        config.EPOCH_PER_METRIC = 16
 
         last_metric = train.train(config)
 

@@ -65,8 +65,9 @@ def train(cfg: Config):
             # batched is also a list of variable sized elements, where each list is a separate identity
 
             # TODO figure out what to do with dict
-            if isinstance(batch[0], dict):
-                batch = [list(b.values()) for b in batch]
+            # Ignore the metadata (names) of the idents
+            assert(isinstance(batch[0], dict))
+            batch = [list(b.values()) for b in batch]
 
             descritors = []
             for i in range(len(batch)):

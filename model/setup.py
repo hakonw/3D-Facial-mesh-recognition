@@ -13,14 +13,14 @@ class Datasets:
     # Facegen Dataset
     DATASET_PATH_FACEGEN = "/lhome/haakowar/Downloads/FaceGen_DB/"
     # print("Dataset: Facegen")
-    FACEGEN_HELPER = datasetFacegen.FaceGenDatasetHelper(root=DATASET_PATH_FACEGEN, pickled=DATASET_SAVE, face_to_edge=DATASET_EDGE)
-    DATASET_FACEGEN = datasetFacegen.FaceGenDataset(FACEGEN_HELPER.get_cached_dataset())
+    # FACEGEN_HELPER = datasetFacegen.FaceGenDatasetHelper(root=DATASET_PATH_FACEGEN, pickled=DATASET_SAVE, face_to_edge=DATASET_EDGE)
+    # DATASET_FACEGEN = datasetFacegen.FaceGenDataset(FACEGEN_HELPER.get_cached_dataset())
 
     # BU-3DFE Dataset
     DATASET_PATH_BU3DFE = "/lhome/haakowar/Downloads/BU_3DFE/"
-    # print("Dataset: BU-3DGE")
-    # BU3DFE_HELPER = datasetBU3DFE.BU3DFEDatasetHelper(root=DATASET_PATH_BU3DFE, pickled=DATASET_SAVE)
-    # DATASET_BU3DGE = datasetBU3DFE.BU3DFEDataset(BU3DFE_HELPER.get_cached_dataset())
+    print("Dataset: BU-3DGE")
+    BU3DFE_HELPER = datasetBU3DFE.BU3DFEDatasetHelper(root=DATASET_PATH_BU3DFE, pickled=DATASET_SAVE)
+    DATASET_BU3DGE = datasetBU3DFE.BU3DFEDataset(BU3DFE_HELPER.get_cached_dataset())
 
 
 class Config:
@@ -47,10 +47,10 @@ class Config:
 
     # Dataset and Dataloader
     NUM_WORKERS = 1  # for the dataloader. As it is in memory, a high number is not needed
-    DATASET = Datasets.DATASET_FACEGEN
-    DATASET_HELPER = Datasets.FACEGEN_HELPER
-    #DATASET = Datasets.DATASET_BU3DGE
-    #DATASET_HELPER = Datasets.BU3DFE_HELPER
+    # DATASET = Datasets.DATASET_FACEGEN
+    # DATASET_HELPER = Datasets.FACEGEN_HELPER
+    DATASET = Datasets.DATASET_BU3DGE
+    DATASET_HELPER = Datasets.BU3DFE_HELPER
 
     # Various logger
     LEAVE_TQDM = True

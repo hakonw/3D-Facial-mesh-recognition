@@ -41,12 +41,13 @@ class FaceGenDatasetHelper:
             assert len(file_path_alt_list) == 1  # Mostly a precaution to see more about the data
             file_paths = [file_path_reg] + file_path_alt_list
 
-            data = []
+            data = {}
             for file_path in file_paths:
                 obj_file = read_obj(file_path)
                 if face_to_edge:
                     obj_file = FaceGenDatasetHelper._face_to_edge_transformator(obj_file)  # Replace faces with edges
-                data.append(obj_file)
+                basename = os.path.basename(file_path)[:-4]  # Get the filename, minus the extension (.obj)
+                data[basename] = obj_file
 
             self.dataset[folder] = data
 
@@ -73,10 +74,10 @@ class FaceGenDataset(Dataset):
     def __getitem__(self, idx):
         # Generate a pair of valid positive samples
         data = self.dataset_cache[self.dataset_keys[idx]]
-        assert len(data) >= 2  # Impossible otherwise, need to change strategy then
+        assert len(data) == 2
         # As there are only 2 scans for each identity, just return them both
-        data = [d.clone() for d in data]  # Make sure not to edit the originals
-        return data
+        safe_dict = {n: d.clone() for n, d in data.items()}  # Make sure not to edit the originals
+        return safe_dict
         # data1.__setitem__("id", idx)
         # data2.__setitem__("id", idx)
         # random_sample = random.sample(data, 2)  # get 2 random samples

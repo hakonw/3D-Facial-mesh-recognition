@@ -2,6 +2,7 @@ from torch_geometric.data import Data
 import torch_geometric.utils
 import torch
 from tqdm import tqdm
+import onlineTripletLoss
 
 #
 # Processing of data before metrics
@@ -21,16 +22,12 @@ def data_dict_to_descriptor_dict(model, device, data_dict, desc="Evaluation", le
     descriptor_dict = {}
 
     for key, data_list in tqdm(data_dict.items(), desc=desc, leave=leave_tqdm):
-        desc_list = []
-        if isinstance(data_list, list):
-            for data in data_list:
-                desc_list.append(single_data_to_descriptor(model, device, data.clone()))
-        if isinstance(data_list, dict):
-            for name, data in data_list.items():
-                desc_list.append(single_data_to_descriptor(model, device, data.clone()))
+        assert isinstance(data_list, dict)
+        desc_dict = {}
+        for name, data in data_list.items():  # Keep the file metatadata if needed later
+            desc_dict[name] = single_data_to_descriptor(model, device, data.clone())
 
-        descriptor_dict[key] = desc_list
-        #model.to(device)
+        descriptor_dict[key] = desc_dict
     return descriptor_dict
 
 
@@ -93,52 +90,42 @@ def compare_two_unique_desc_lists(margin: float, desc_list1, desc_list2):
 def get_base_metric_all_vs_all(margin: float, descriptor_dict):
     metrics = BaseMetric(tp=0, fp=0, tn=0, fn=0)
 
+    descriptors = []
+    label_ident = []
+    label_name = []
+
+    # Collapse the dict to one list
+    for ident, ident_dict in descriptor_dict.items():
+        for name, data in ident_dict.items():
+            descriptors.append(data)
+            label_ident.append(ident)
+            label_name.append(name)
+
+    assert len(descriptors) == len(label_ident) == len(label_name)
+    descriptors = torch.stack(descriptors)
+    distances = onlineTripletLoss.pairwise_distances(embeddings=descriptors)
+
+    # TODO make in matrix notation?
     # Check all vs all, same ID
-    for _, desc_list in descriptor_dict.items():
-        idxs_done = []
-        for idx1, desc1 in enumerate(desc_list):
-            for idx2, desc2 in enumerate(desc_list):
-                if idx2 in idxs_done or idx1 == idx2:  # Skip if already checked, or same id
-                    continue
-                d = distance(desc1, desc2)
-                if d < margin:
+    length = descriptors.size()[0]
+    for idx1 in range(length):
+        for idx2 in range(idx1+1, length):  # Do not check it against previous checked (Half of matrix used only)
+            assert idx1 != idx2  # Do not check against itself
+            assert label_name[idx1] != label_name[idx2]  # Dont use label name for other than verification
+
+            d = distances[idx1, idx2]
+            if label_ident[idx1] == label_ident[idx2]:
+                # Same Label, different ident
+                if d < margin:  # Good
                     metrics.tp += 1
-                else:
+                else:           # Bad
                     metrics.fn += 1
-            idxs_done.append(idx1)
-
-
-        # rest_descriptors = desc_list[1:]  # A list containing elements which has not been used as a pivot (yet)
-        # for desc1 in desc_list:
-        #     for desc2 in rest_descriptors:
-        #         d = distance(desc1, desc2)
-        #         if d < margin:
-        #             metrics.tp += 1
-        #         else:
-        #             metrics.fn += 1
-        #     del rest_descriptors[:1]  # Delete the leftmost element, which was just used as a pivot
-
-        # Same as:
-        # for i in range(len(desc_list)):
-        #     for j in range(i+1, len(desc_list)):  # From i+1 to the end (exclusive)
-        #         d = distance(desc_list[i], desc_list[j])
-
-
-
-
-    # Want to only calculate one way (desc1 vs desc2)
-    ids_done = []  # Yes this is suboptimal, but has better readability
-    for id1, desc1_list in descriptor_dict.items():
-        for id2, desc2_list in descriptor_dict.items():
-            if id2 in ids_done or id1 == id2:  # Skip if already checked, or same id
-                continue
-            within_margin, outside_margin = compare_two_unique_desc_lists(margin, desc1_list, desc2_list)
-            # If they are within the margin, they are false positives, as the compare ID's are not the same
-            metrics.fp += within_margin
-            # If they are outside the margin, they are true negatives, as they are correctly identified as unique
-            metrics.tn += outside_margin
-
-        ids_done.append(id1)
+            else:
+                # Different label
+                if d >= margin:  # Good
+                    metrics.tn += 1
+                else:            # Bad
+                    metrics.fp += 1
 
     return metrics
 
