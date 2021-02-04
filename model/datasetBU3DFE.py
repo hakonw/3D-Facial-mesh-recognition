@@ -94,10 +94,11 @@ class BU3DFEDataset(Dataset):  # This does not need to be of type Dataset
         # Data is a new dict
         safe_dict = {}
         for name, d in data.items():
-            safe_dict[name] = d.clone()  # Make sure not to edit the originals
+            level = name[8:10]
+            if level == "01" or level == "00":
+                safe_dict[name] = d.clone()  # Make sure not to edit the originals
 
         # TODO generate some filter somhow
-
         return safe_dict
 
 

@@ -12,7 +12,7 @@ def single_data_to_descriptor(model, device, data):
     data.to(device)
     # Assuming single data, ergo dont need to do .to_data_list()
     descriptor = model(data)
-    descriptor.to("cpu")  # Results are returned to the cpu, as ASAPooling would use over 12gb memory (because of grad)
+    descriptor.to("cpu")  # Results are returned to the cpu, as ASAPooling with grad would use over 12gb memory
     return descriptor
 
 # Assumes dict: ID -> list(Data)
@@ -22,8 +22,13 @@ def data_dict_to_descriptor_dict(model, device, data_dict, desc="Evaluation", le
 
     for key, data_list in tqdm(data_dict.items(), desc=desc, leave=leave_tqdm):
         desc_list = []
-        for data in data_list:
-            desc_list.append(single_data_to_descriptor(model, device, data.clone()))
+        if isinstance(data_list, list):
+            for data in data_list:
+                desc_list.append(single_data_to_descriptor(model, device, data.clone()))
+        if isinstance(data_list, dict):
+            for name, data in data_list.items():
+                desc_list.append(single_data_to_descriptor(model, device, data.clone()))
+
         descriptor_dict[key] = desc_list
         #model.to(device)
     return descriptor_dict

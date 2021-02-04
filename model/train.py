@@ -55,7 +55,7 @@ def train(cfg: Config):
         tq = tqdm(enumerate(dataloader), desc=f"Epoch {epoch}/{cfg.EPOCHS}", leave=cfg.LEAVE_TQDM)
 
         losses = []
-        for i_batch, batched in tq:
+        for i_batch, batch in tq:
             optimizer.zero_grad()
 
             # Sample_batched is a list, instead of a pytorch_geometric batched object
@@ -65,12 +65,12 @@ def train(cfg: Config):
             # batched is also a list of variable sized elements, where each list is a separate identity
 
             # TODO figure out what to do with dict
-            if isinstance(batched, dict):
-                batched = batched.values()
+            if isinstance(batch[0], dict):
+                batch = [list(b.values()) for b in batch]
 
             descritors = []
-            for i in range(len(batched)):
-                ident = [model(d.to(device)) for d in batched[i]]
+            for i in range(len(batch)):
+                ident = [model(d.to(device)) for d in batch[i]]
                 descritors.append(ident)
 
             anchors, positives, negatives = tripletutils.findtriplets(descritors, accept_all=cfg.ALL_TRIPLETS)
@@ -115,6 +115,7 @@ def train(cfg: Config):
         labels = []
         features = []
         for id, desc_list in descriptor_dict.items():
+            # TODO wrong if input to descriptor is dict
             for desc in desc_list:
                 labels.append(id)
                 features.append(desc)

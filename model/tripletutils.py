@@ -1,52 +1,40 @@
 import torch
+import onlineTripletLoss
+
 
 # Functions used to generate triplets
-
-def euclidean_distance(descriptor1, descriptor2):
-    return torch.dist(descriptor1, descriptor2, p=2)
-
-# Not the loss used in train, as it meant for 1 triplet at a time
-def triplet_loss(margin, anchor, pos, neg):
-    return max(euclidean_distance(anchor, pos) - euclidean_distance(anchor, neg) + margin, 0)
-
 # TODO pairs as input is wrong (too restrictive), fix sometime
+# TODO also replace with the onlinetripletloss?
 def findtriplets(pairs, req_distance=1.0, accept_all=True):
     assert len(pairs) > 1
     valid_triplets = []
 
-    # Goal: Find the triplet where a neg is closer to an anchor than a pos, with min/max distance
-    # Solution, only find hard triplets atm, dont care about maximizing hard triplets
-    #  Also allow for semi-hard
-    # THIS SHOULD BE DONE WITH A MASK AND PYTORCH, instead of this massive n^2 * m^3   ish behaviour
-    # AS IT CAN BE DONE MORE EFFICIENT THAN FOR LOOPS
+    # Unwrap from list for each ident, to a single long list with all
+    all = []
+    labels = []  # indencies for all, eks [0,0,0,1,1,2,2,3,3]
+    for ident, list in enumerate(pairs):
+        all += list
+        labels += [ident]*len(list)
 
-    for i, list1 in enumerate(pairs):
-        for j, list2 in enumerate(pairs):
-            if i != j:  # Dont check same id against each other
-                best_loss = -1 if accept_all else 0  # Higher loss is better for training, set to 0 to only include non-zero losses
-                best_triplet = None
+    all = torch.stack(all)
+    labels = torch.tensor(labels)
+    distances = onlineTripletLoss.pairwise_distances(all)  # Assume symmetric, a -> b
+    mask = onlineTripletLoss.get_triplet_mask(labels)
 
-                # Find the best triplet for list1
-                for idx1, list1_element1 in enumerate(list1):
-                    for idx2, list1_element2 in enumerate(list1):
-                        if idx1 != idx2:
-                            # Here, all possible combinations of the pos/neg is created
-                            #   For 2 elements, they are (1,2), (2,1)
-                            #   for 3 elements, they are (1,2,3), (1,3,2), (2,1,3), (2,3,1), (3,1,2), (3,2,1)
-                            #   O(n!) behaviour
-                            # Now check against all possible elements and find the best
-                            for neg_sample in list2:
-                                score = triplet_loss(req_distance, list1_element1, list1_element2, neg_sample)
-                                if score > best_loss:
-                                    best_loss = score
-                                    best_triplet = (list1_element1, list1_element2, neg_sample)
-                if best_triplet is not None:
-                    # Sanity assert, reduces speed by 0.8 it/s
-                    # assert any([(best_triplet[0] == c_).all() for c_ in list1])  # Anc
-                    # assert any([(best_triplet[1] == c_).all() for c_ in list1])  # Pos
-                    # assert any([(best_triplet[2] == c_).all() for c_ in list2])  # Neg
-                    valid_triplets.append(best_triplet)
+    size = len(all)
+    for a in range(size):
+        for n in range(size):
+            best_loss = -1 if accept_all else 0  # Higher loss is "better", set to 0 to only include non-zero losses
+            best_triplet = None
 
+            for p in range(size):
+                if mask[a, p, n].all():
+                    score = max(distances[a, p] - distances[a, n] + req_distance, 0)
+                    if score > best_loss:
+                        best_loss = score
+                        best_triplet = (all[a], all[p], all[n])
+            if best_triplet is not None:
+                valid_triplets.append(best_triplet)
 
     # We should hopefully here have lots of good hard/semi-hard pairs
     # If there are none, create a negative triplet to not crash the loss function

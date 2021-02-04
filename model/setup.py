@@ -11,22 +11,22 @@ class Datasets:
     DATASET_EDGE = True
 
     # Facegen Dataset
-    print("Dataset: Facegen")
     DATASET_PATH_FACEGEN = "/lhome/haakowar/Downloads/FaceGen_DB/"
+    # print("Dataset: Facegen")
     FACEGEN_HELPER = datasetFacegen.FaceGenDatasetHelper(root=DATASET_PATH_FACEGEN, pickled=DATASET_SAVE, face_to_edge=DATASET_EDGE)
     DATASET_FACEGEN = datasetFacegen.FaceGenDataset(FACEGEN_HELPER.get_cached_dataset())
 
     # BU-3DFE Dataset
+    DATASET_PATH_BU3DFE = "/lhome/haakowar/Downloads/BU_3DFE/"
     # print("Dataset: BU-3DGE")
-    # DATASET_PATH_BU3DFE = "/lhome/haakowar/Downloads/BU_3DFE/"
     # BU3DFE_HELPER = datasetBU3DFE.BU3DFEDatasetHelper(root=DATASET_PATH_BU3DFE, pickled=DATASET_SAVE)
-    # DATASET_BU3DGE = datasetBU3DFE.BU3DFEDataset(BU3DFE_HELPER)
+    # DATASET_BU3DGE = datasetBU3DFE.BU3DFEDataset(BU3DFE_HELPER.get_cached_dataset())
 
 
 class Config:
     # General
     EPOCHS = 20
-    BATCH_SIZE = 10  # Note, currently the triplet selector is n^2 * m^2, or n^2 if n >> m (batch size vs scans per id)
+    BATCH_SIZE = 4  # Note, currently the triplet selector is n^2 * m^2, or n^2 if n >> m (batch size vs scans per id)
 
     # Metrics
     EPOCH_PER_METRIC = 4
@@ -43,13 +43,14 @@ class Config:
     ALL_TRIPLETS = True  # To allow soft triplets (loss=0) & to have a comparable loss, or else have comparable triplets
 
     # Optimizer
-    LR = 1e-4
+    LR = 5e-4
 
     # Dataset and Dataloader
     NUM_WORKERS = 1  # for the dataloader. As it is in memory, a high number is not needed
     DATASET = Datasets.DATASET_FACEGEN
     DATASET_HELPER = Datasets.FACEGEN_HELPER
-
+    #DATASET = Datasets.DATASET_BU3DGE
+    #DATASET_HELPER = Datasets.BU3DFE_HELPER
 
     # Various logger
     LEAVE_TQDM = True
