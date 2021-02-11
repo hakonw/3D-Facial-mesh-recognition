@@ -8,6 +8,7 @@ import onlineTripletLoss
 # Processing of data before metrics
 #
 
+
 @torch.no_grad()  # This function disables autograd, so no training can be done on the data
 def single_data_to_descriptor(model, device, data):
     data.to(device)
@@ -16,8 +17,9 @@ def single_data_to_descriptor(model, device, data):
     descriptor.to("cpu")  # Results are returned to the cpu, as ASAPooling with grad would use over 12gb memory
     return descriptor
 
-# Assumes dict: ID -> list(Data)
-# : dict[str, list[Data]
+
+# Assumes dict: ID -> name -> Data
+# : dict[str, dict[str, [Data]]
 def data_dict_to_descriptor_dict(model, device, data_dict, desc="Evaluation", leave_tqdm=True):
     descriptor_dict = {}
 
@@ -65,6 +67,35 @@ class ScoreMetric(BaseMetric):
         return f"ScoreMetric(tp={self.tp}, fp={self.fp}, tn={self.tn}, fn={self.fn}, " + \
                f"acc={self.accuracy:.4f}, preci={self.precision:.3f} recall={self.recall:.3f}, f1={self.f1:.3f}, " + \
                f"FRR={self.FRR:.3f}, FAR={self.FAR:.3f})"
+
+
+# TODO make into part of class?
+def generate_score_metric_from_base(base_metric: BaseMetric):
+    metrics = ScoreMetric.from_instance(base_metric)  # Inherit from the base metric
+
+    epsilon = 0.000001
+
+    def nonzero(maybe_zero):
+        return max(maybe_zero, epsilon)
+
+    tp = base_metric.tp
+    tn = base_metric.tn
+    fp = base_metric.fp
+    fn = base_metric.fn
+
+    metrics.accuracy = (tp + tn) / (tp + tn + fp + fn)
+    metrics.precision = tp / nonzero(tp + fp)  # Also called Positive Predictive Value (PPV)
+    metrics.recall = tp / nonzero(tp + fn)  # Also called True positive rate or sensitivity
+    metrics.f1 = 2 * (metrics.precision * metrics.recall) / nonzero(metrics.precision + metrics.recall)
+    metrics.FRR = fn / nonzero(tp + fn)  # Also called FNR False negative rate
+    metrics.FAR = fp / nonzero(tn + tn)  # Also called FPR False positive rate
+    # Specificity (SPC) or True Negative Rate (TNR):    # SPC = TN / N = TN / (FP + TN)
+    # Negative Predictive Value (NPV):     # NPV = TN / (TN + FN)
+    # Fall-Out or False Positive Rate (FPR):    # FPR = FP / N = FP / (FP + TN) =1 – SPC
+    # False Discovery Rate (FDR):    # FDR = FP / (FP + TP) =1 – PPV  # Good pga ikke TN
+    # Mathews Correlation Coefficient (MCC):    # MCC=(TP*TN-FP*FN)/sqrt((TP+FP)*(TP+FN)*(TN+FP) *(TN+FN))
+
+    return metrics
 
 #
 # Metrics
@@ -129,27 +160,13 @@ def get_base_metric_all_vs_all(margin: float, descriptor_dict):
 
     return metrics
 
+
 # torch_geometric.utils.  accuracy, precision, recall, f1
 def get_metric_all_vs_all(margin: float, descriptor_dict):
     base_metric = get_base_metric_all_vs_all(margin=margin, descriptor_dict=descriptor_dict)
-    metrics = ScoreMetric.from_instance(base_metric)  # Inherit from the base metric
-
-    epsilon = 0.000001
-    def nonzero(maybe_zero):
-        return max(maybe_zero, epsilon)
-
-    tp = base_metric.tp
-    tn = base_metric.tn
-    fp = base_metric.fp
-    fn = base_metric.fn
-
-    metrics.accuracy = (tp + tn) / (tp + tn + fp + fn)
-    metrics.precision = tp / nonzero(tp + fp)
-    metrics.recall = tp / nonzero(tp + fn)
-    metrics.f1 = 2 * (metrics.precision * metrics.recall) / nonzero(metrics.precision + metrics.recall)
-    metrics.FRR = fn / nonzero(fn + tp)
-    metrics.FAR = fp / nonzero(fp + tn)
-
-    return metrics
+    return generate_score_metric_from_base(base_metric)
 
 
+def get_metric_gallery_set_vs_probe_set(gallery_descriptors, probe_descriptors):
+    base_metric = None
+    return generate_score_metric_from_base(base_metric)

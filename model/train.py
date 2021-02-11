@@ -117,8 +117,8 @@ def train(cfg: Config):
         features = []
         for id, desc_list in descriptor_dict.items():
             # TODO wrong if input to descriptor is dict
-            for desc in desc_list:
-                labels.append(id)
+            for name, desc in desc_list.items():
+                labels.append(f"{id}-{name}")
                 features.append(desc)
         embeddigs = torch.stack(features)
         writer.add_embedding(mat=embeddigs, metadata=labels, tag=cfg.run_name)
