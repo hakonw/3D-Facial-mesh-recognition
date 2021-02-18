@@ -43,7 +43,7 @@ optimizer = torch.optim.SGD(model.parameters(), lr=1e-3)
 
 epochs = 20
 batch_size = 4
-split = (0.6, 0.4)
+split = (0.8, 0.2)
 train_dataset_size = 100*split[0]
 batch_iter_update = (train_dataset_size/batch_size)/8  # Update 8 times per epoch
 
@@ -108,7 +108,7 @@ try:
             losses[iter] = loss.item()
             # batch_iter_size * i_batch + total*epoch/batch ?
             if iter % batch_iter_update == 0:
-                tq.set_postfix(loss=loss.item(), avg_loss=running_loss/loss_samples)
+                tq.set_postfix(avg_loss=running_loss/loss_samples)
 
 
 

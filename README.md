@@ -9,8 +9,8 @@ This project is a proof of concept method for a new type of 3D facial recognitio
 ```
 conda create -n pytorch3d_new python=3.8
 conda activate pytorch3d_new
-conda install -c pytorch pytorch=1.7.0 torchvision cudatoolkit=11.0
-conda install -c conda-forge -c fvcore fvcore
+conda install -c pytorch pytorch=1.7.1 torchvision cudatoolkit=11.0
+conda install -c conda-forge -c fvcore -c iopath fvcore iopath
 conda install -c pytorch3d-nightly pytorch3d
 ```
 

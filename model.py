@@ -5,7 +5,6 @@ import pytorch3d
 from pytorch3d.structures import Meshes
 
 
-
 class TestNet(torch.nn.Module):
     def __init__(self, device, debug=False):
         super(TestNet, self).__init__()
@@ -13,14 +12,16 @@ class TestNet(torch.nn.Module):
         self.debug = debug
 
         self.conv1 = pytorch3d.ops.GraphConv(input_dim=3, output_dim=5, init="normal", directed=False)
-        self.conv2 = pytorch3d.ops.GraphConv(input_dim=5, output_dim=20, init="normal", directed=False)
+        self.conv2 = pytorch3d.ops.GraphConv(input_dim=5, output_dim=25, init="normal", directed=False)
+        self.conv3 = pytorch3d.ops.GraphConv(input_dim=25, output_dim=50, init="normal", directed=False)
 
         self.activation = nn.LeakyReLU()
         self.flatten = nn.Flatten()
 
         siste_lag = 10
-        self.fc1 = nn.Linear(20, siste_lag)
-        self.fc2 = nn.Linear(5850*siste_lag, 100)  # 5850, as thats the current max edges, TODO fix better way
+        self.fc1 = nn.Linear(50, siste_lag)
+
+        self.fc2 = nn.Linear(5850*siste_lag, 128)  # 5850, as thats the current max edges, TODO fix better way
 
         #self.softmax = nn.Softmax(dim=1)
 
@@ -40,6 +41,9 @@ class TestNet(torch.nn.Module):
         x = self.conv2(x, edges)
         x = self.activation(x)
 
+        x = self.conv3(x, edges)
+        x = self.activation(x)
+
         #x = self.conv3(x, edges)
         #x = self.activation(x)
 
@@ -56,6 +60,10 @@ class TestNet(torch.nn.Module):
 
         x = self.fc1(splitted)
         x = self.activation(x)
+
+        # print("pre", x.shape) # ([8, 5850, 1])
+        # x, _ = torch.max(x, dim=1)
+        # print("post", x.shape) # ([8, 5850])
 
         x = self.flatten(x)
         x = self.fc2(x)
