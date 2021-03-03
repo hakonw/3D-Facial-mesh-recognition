@@ -6,6 +6,7 @@ from tqdm import tqdm
 
 from torch.utils.data import Dataset
 import torch_geometric.transforms
+import torch_geometric.transforms as T
 
 from read_wrl import read_wrl
 from utils import list_collate_fn
@@ -85,6 +86,7 @@ class BU3DFEDataset(Dataset):  # This does not need to be of type Dataset
     def __init__(self, dataset_cache: dict):
         self.dataset_cache = dataset_cache
         self.dataset_keys = list(dataset_cache.keys())
+        self.transform = T.Compose([T.NormalizeScale()])
 
     def __len__(self):
         return len(self.dataset_keys)

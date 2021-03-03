@@ -9,6 +9,8 @@ from utils import list_collate_fn
 from torch.utils.data import Dataset
 import torch_geometric.transforms
 
+import torch_geometric.transforms as T
+
 random.seed(1)
 import torch
 torch.manual_seed(1)
@@ -60,6 +62,7 @@ class FaceGenDatasetHelper:
         return self.dataset
 
 
+
 # Possibly switch over to pytorch-gemoetric dataset
 # https://pytorch-geometric.readthedocs.io/en/latest/notes/introduction.html#data-transforms
 # Eks: transform=T.RandomTranslate(0.01)
@@ -67,6 +70,7 @@ class FaceGenDataset(Dataset):
     def __init__(self, dataset_cache: dict):
         self.dataset_cache = dataset_cache
         self.dataset_keys = list(dataset_cache.keys())
+        self.transform = T.Compose([T.ToUndirected()])  # T.Compose([T.NormalizeScale()])
 
     def __len__(self):
         return len(self.dataset_keys)
@@ -76,7 +80,7 @@ class FaceGenDataset(Dataset):
         data = self.dataset_cache[self.dataset_keys[idx]]
         assert len(data) == 2
         # As there are only 2 scans for each identity, just return them both
-        safe_dict = {n: d.clone() for n, d in data.items()}  # Make sure not to edit the originals
+        safe_dict = {n: self.transform(d.clone()) for n, d in data.items()}  # Make sure not to edit the originals
         return safe_dict
         # data1.__setitem__("id", idx)
         # data2.__setitem__("id", idx)

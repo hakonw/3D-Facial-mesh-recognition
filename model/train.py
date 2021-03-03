@@ -11,6 +11,8 @@ import metrics
 import dataclasses
 import os
 
+import onlineTripletLoss
+
 if torch.cuda.is_available():
     device = torch.device("cuda:0")
     torch.cuda.set_device(device)
@@ -47,7 +49,7 @@ def train(cfg: Config):
 
     print("Loading DataLoader")
     # Note custom collate fn
-    dataloader = DataLoader(dataset=cfg.DATASET, batch_size=cfg.BATCH_SIZE, shuffle=True, num_workers=cfg.NUM_WORKERS, collate_fn=utils.list_collate_fn)
+    dataloader = DataLoader(dataset=cfg.DATASET, batch_size=cfg.BATCH_SIZE, shuffle=True, num_workers=cfg.NUM_WORKERS, collate_fn=utils.list_collate_fn, drop_last=True)
 
     print("Staring")
     iter = 0
@@ -74,17 +76,41 @@ def train(cfg: Config):
                 ident = [model(d.to(device)) for d in batch[i]]
                 descritors.append(ident)
 
-            anchors, positives, negatives = tripletutils.findtriplets(descritors, accept_all=cfg.ALL_TRIPLETS)
-            # loss
-            loss = criterion(anchors, positives, negatives)
+            # Første id: anchor og pos
+            # Alle andre: Negative
+            negs = []
+            for i in range(1, len(descritors)):
+                for m in descritors[i]:
+                    negs.append(m)
+            anc = descritors[0][1].to("cpu").unsqueeze(0).expand(len(negs), -1)
+            pos = descritors[0][0].to("cpu").unsqueeze(0).expand(len(negs), -1)
+            negs = torch.stack(negs).to("cpu")
+            loss = criterion(anc, pos, negs)
+
+
+            # anchors, positives, negatives = tripletutils.findtriplets(descritors, accept_all=cfg.ALL_TRIPLETS)
+            # loss = criterion(anchors, positives, negatives)
+
+            # # Unwrap from list for each ident, to a single long list with all
+            # all = []
+            # labels = []  # indencies for all, eks [0,0,0,1,1,2,2,3,3]
+            # for ident, listt in enumerate(descritors):
+            #     all += listt
+            #     labels += [ident] * len(listt)
+            #
+            # all = torch.stack(all).to("cpu")
+            # labels = torch.tensor(labels).to("cpu")
+            # loss, fraction_positive_triplets = onlineTripletLoss.batch_all_triplet_loss(labels=labels, embeddings=all, margin=1.0)
+
+
 
             iter += 1
             losses.append(loss.item())
             if writer is not None:
                 writer.add_scalar('Loss/train', loss.item(), iter)
-                writer.add_scalar('Pairs/train', len(anchors), iter)
+                #writer.add_scalar('Pairs/train', len(anchors), iter)
             if iter % 5 == 0:
-                tq.set_postfix(avg_loss=sum(losses)/max(len(losses), 1), pairs=len(anchors))
+                tq.set_postfix(avg_loss=sum(losses)/max(len(losses), 1) ) #, fraction=fraction_positive_triplets.item()) #, pairs=len(anchors))
 
             optimizer.zero_grad()
             loss.backward()
