@@ -19,6 +19,9 @@ def max_pool_neighbor_x(x, edge_index, flow='source_to_target'):
     row, col = (row, col) if flow == 'source_to_target' else (col, row)
 
     x = scatter(x[row], col, dim=0, dim_size=x.shape[0], reduce='max')
+    # if batch is None:
+    #             batch = torch.zeros(x.size(0), dtype=torch.long, device=x.device)
+
     return x
 
 
@@ -474,6 +477,38 @@ class TestNet3(torch.nn.Module):
         out_str = out_str[:-2]  # Remove ", " at the end
         return out_str
 
+
+
+from torch_geometric.nn import PointConv
+
+class TestPoint(torch.nn.Module):
+    def __init__(self):
+        super(TestPoint, self).__init__()
+
+        self.activation = nn.LeakyReLU()
+
+        self.conv1 = PointConv()
+
+
+    def forward(self, data):
+        x, pos, edge_index = data.x, data.pos, data.edge_index
+
+        x = self.conv1(x=x, pos=pos, edge_index=edge_index)
+        x = self.activation(x)
+
+        return x
+
+    def short_rep(self):
+        modules = self._modules
+        out_str = ""  # Semi efficient
+        for name, type in modules.items():
+            str_rep = str(type)
+            if "LeakyReLU" in str_rep:
+                str_rep = "LeakyReLU"
+            str_rep = str_rep.replace(", bias=True", "")
+            out_str += str_rep + ", "
+        out_str = out_str[:-2]  # Remove ", " at the end
+        return out_str
 
 if __name__ == "__main__":
     model = TestNet()

@@ -29,7 +29,7 @@ class BU3DFEDatasetHelper:
     # classes = ["AN", "DI", "FE", "HA", "NE", "SA", "SU"]
     _face_to_edge_transformator = torch_geometric.transforms.FaceToEdge(remove_faces=True)
 
-    def __init__(self, root, pickled=True):
+    def __init__(self, root, pickled=True, face_to_edge=True):
         self.dataset = {}
 
         if pickled:
@@ -67,7 +67,8 @@ class BU3DFEDatasetHelper:
                 basename = basename[:-8]  # Hardcoded, remove _F3D.wrl
 
                 data_file = read_wrl(file_path)
-                data_file = BU3DFEDatasetHelper._face_to_edge_transformator(data_file)  # Replace faces with edges
+                if face_to_edge:
+                    data_file = BU3DFEDatasetHelper._face_to_edge_transformator(data_file)  # Replace faces with edges
 
                 data[basename] = data_file
 
@@ -83,10 +84,10 @@ class BU3DFEDatasetHelper:
 
 
 class BU3DFEDataset(Dataset):  # This does not need to be of type Dataset
-    def __init__(self, dataset_cache: dict):
+    def __init__(self, dataset_cache: dict, posttransform):
         self.dataset_cache = dataset_cache
         self.dataset_keys = list(dataset_cache.keys())
-        self.transform = T.Compose([T.NormalizeScale()])
+        self.transform = posttransform
 
     def __len__(self):
         return len(self.dataset_keys)
@@ -98,7 +99,7 @@ class BU3DFEDataset(Dataset):  # This does not need to be of type Dataset
         for name, d in data.items():
             level = name[8:10]
             if level == "01" or level == "00":
-                safe_dict[name] = d.clone()  # Make sure not to edit the originals
+                safe_dict[name] = self.transform(d.clone())  # Make sure not to edit the originals
 
         # TODO generate some filter somhow
         return safe_dict

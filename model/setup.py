@@ -4,11 +4,15 @@ from torch.utils.tensorboard import SummaryWriter
 import network
 import datasetFacegen
 import datasetBU3DFE
+import torch_geometric.transforms as T
 
 
 class Datasets:
     DATASET_SAVE = True
-    DATASET_EDGE = True
+    DATASET_EDGE = False
+
+    # POST_TRANSFORM = T.Compose([T.NormalizeScale(), T.SamplePoints(num=2048)])
+    POST_TRANSFORM = T.Compose([T.SamplePoints(num=2048)])
 
     # Facegen Dataset
     @staticmethod
@@ -16,7 +20,7 @@ class Datasets:
         DATASET_PATH_FACEGEN = "/lhome/haakowar/Downloads/FaceGen_DB/"
         print("Dataset: Facegen")
         FACEGEN_HELPER = datasetFacegen.FaceGenDatasetHelper(root=DATASET_PATH_FACEGEN, pickled=Datasets.DATASET_SAVE, face_to_edge=Datasets.DATASET_EDGE)
-        DATASET_FACEGEN = datasetFacegen.FaceGenDataset(FACEGEN_HELPER.get_cached_dataset())
+        DATASET_FACEGEN = datasetFacegen.FaceGenDataset(FACEGEN_HELPER.get_cached_dataset(), Datasets.POST_TRANSFORM)
         return FACEGEN_HELPER, DATASET_FACEGEN
 
     # BU-3DFE Dataset
@@ -24,21 +28,23 @@ class Datasets:
     def get_bu3dfe_dataset():
         DATASET_PATH_BU3DFE = "/lhome/haakowar/Downloads/BU_3DFE/"
         print("Dataset: BU-3DGE")
-        BU3DFE_HELPER = datasetBU3DFE.BU3DFEDatasetHelper(root=DATASET_PATH_BU3DFE, pickled=Datasets.DATASET_SAVE)
-        DATASET_BU3DGE = datasetBU3DFE.BU3DFEDataset(BU3DFE_HELPER.get_cached_dataset())
+        BU3DFE_HELPER = datasetBU3DFE.BU3DFEDatasetHelper(root=DATASET_PATH_BU3DFE, pickled=Datasets.DATASET_SAVE, face_to_edge=Datasets.DATASET_EDGE)
+        DATASET_BU3DGE = datasetBU3DFE.BU3DFEDataset(BU3DFE_HELPER.get_cached_dataset(), Datasets.POST_TRANSFORM)
         return BU3DFE_HELPER, DATASET_BU3DGE
 
 
 class Config:
     # General
-    EPOCHS = 80
-    BATCH_SIZE = 4  # Note, currently the triplet selector is n^2 * m^2, or n^2 if n >> m (batch size vs scans per id)
+    EPOCHS = 40
+    BATCH_SIZE = 6  # Note, currently the triplet selector is n^2 * m^2, or n^2 if n >> m (batch size vs scans per id)
 
     # Metrics
     EPOCH_PER_METRIC = 10
 
     # Model
-    MODEL = network.TestNet2()  # TestNet (new) or PrelimNet (old)
+    import networkPointnet
+    MODEL = networkPointnet.Net()
+    # MODEL = network.PrelimNet()  # TestNet (new) or PrelimNet (old)
 
     # Loss function
     MARGIN = 1.0
@@ -49,7 +55,7 @@ class Config:
     ALL_TRIPLETS = True  # To allow soft triplets (loss=0) & to have a comparable loss, or else have comparable triplets
 
     # Optimizer
-    LR = 5e-4
+    LR = 1e-3
 
     # Dataset and Dataloader
     NUM_WORKERS = 1  # for the dataloader. As it is in memory, a high number is not needed
@@ -57,8 +63,8 @@ class Config:
     # DATASET_HELPER = Datasets.FACEGEN_HELPER
     # DATASET = Datasets.DATASET_BU3DGE
     # DATASET_HELPER = Datasets.BU3DFE_HELPER
-    DATASET_HELPER, DATASET = Datasets.get_facegen_dataset()
-    #  DATASET_HELPER, DATASET = Datasets.get_bu3dfe_dataset()
+    # DATASET_HELPER, DATASET = Datasets.get_facegen_dataset()
+    DATASET_HELPER, DATASET = Datasets.get_bu3dfe_dataset()
 
     # Various logger
     LEAVE_TQDM = True

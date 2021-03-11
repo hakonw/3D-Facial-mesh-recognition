@@ -67,10 +67,10 @@ class FaceGenDatasetHelper:
 # https://pytorch-geometric.readthedocs.io/en/latest/notes/introduction.html#data-transforms
 # Eks: transform=T.RandomTranslate(0.01)
 class FaceGenDataset(Dataset):
-    def __init__(self, dataset_cache: dict):
+    def __init__(self, dataset_cache: dict, posttransform):
         self.dataset_cache = dataset_cache
         self.dataset_keys = list(dataset_cache.keys())
-        self.transform = T.Compose([T.ToUndirected()])  # T.Compose([T.NormalizeScale()])
+        self.transform = posttransform
 
     def __len__(self):
         return len(self.dataset_keys)
