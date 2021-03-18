@@ -7,7 +7,8 @@ from torch.nn import Sequential as Seq, Linear as Lin, ReLU, Flatten, BatchNorm1
 import torch_geometric.transforms as T
 from torch_geometric.data import DataLoader
 from torch_geometric.nn import PointConv, fps, radius, global_max_pool
-
+from torch_geometric.data.batch import Batch
+from torch_geometric.data.data import Data
 
 class SAModule(torch.nn.Module):
     def __init__(self, ratio, r, nn):
@@ -56,29 +57,43 @@ def MLP(channels, batch_norm=True):
 class Net(torch.nn.Module):
     def __init__(self):
         super(Net, self).__init__()
+        torch.manual_seed(1)
 
-        self.sa1_module = SAModule(0.5, 0.2, MLP([3, 64, 64, 128]))
-        self.sa2_module = SAModule(0.25, 0.4, MLP([128 + 3, 128, 128, 256]))
+        self.sa1_module = SAModule(ratio=0.5, r=0.2, nn=MLP([3, 64, 64, 128]))
+        self.sa2_module = SAModule(ratio=0.25, r=2, nn=MLP([128 + 3, 128, 128, 256]))
         self.sa3_module = GlobalSAModule(MLP([256 + 3, 256, 512, 1024]))
 
         self.lin1 = Lin(1024, 512)
-        self.lin2 = Lin(512, 256)
-        # self.lin3 = Lin(256, 10)
+        self.lin2 = Lin(512, 512)
+        self.lin3 = Lin(512, 512)
         self.flatten = Flatten(start_dim=0)  # Special start dim as it is not yet batched
+        self.flatten_batched = Flatten()
 
     def forward(self, data):
-        batch = torch.zeros(data.pos.size(0), dtype=torch.long, device=data.pos.device)
-        sa0_out = (None, data.pos, batch)  # x pos batch
+        batch_mode = False
+        if isinstance(data, Batch):
+            batch_mode = True
+            sa0_out = (None, data.pos, data.batch)  # x pos batch
+        elif isinstance(data, Data):
+            batch = torch.zeros(data.pos.size(0), dtype=torch.long, device=data.pos.device)
+            sa0_out = (None, data.pos, batch)  # x pos batch
+        else:
+            raise RuntimeError(f"Illegal data of type: {type(data)}")
+
         sa1_out = self.sa1_module(*sa0_out)
         sa2_out = self.sa2_module(*sa1_out)
         sa3_out = self.sa3_module(*sa2_out)
         x, pos, batch = sa3_out
 
         x = F.relu(self.lin1(x))
-        x = F.dropout(x, p=0.5, training=self.training)
+        # x = F.dropout(x, p=0.5, training=self.training)
         x = F.relu(self.lin2(x))
         # print(x.shape)
-        x = self.flatten(x)
+        x = self.lin3(x)
+        if batch_mode:
+            x = self.flatten_batched(x)
+        else:
+            x = self.flatten(x)  # Spesial flatten
         return x
         # x = F.dropout(x, p=0.5, training=self.training)
         # x = self.lin3(x)

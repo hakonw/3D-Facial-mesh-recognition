@@ -4,7 +4,9 @@ import torch
 import pickle
 from tqdm import tqdm
 
-from torch.utils.data import Dataset
+#from torch.utils.data import Dataset
+from torch_geometric.data import Dataset
+
 import torch_geometric.transforms
 import torch_geometric.transforms as T
 
@@ -99,7 +101,26 @@ class BU3DFEDataset(Dataset):  # This does not need to be of type Dataset
         for name, d in data.items():
             level = name[8:10]
             if level == "01" or level == "00":
+
+                # import torch_geometric.io
+                # torch_geometric.io.write_off(d, f"./{name}.off")
+                # Gather some statistics about the first graph.
+                # print(f'Number of nodes: {d.num_nodes}')
+                # print(f'Number of edges: {d.num_edges}')
+                # print(f'Average node degree: {d.num_edges / d.num_nodes:.2f}')
+                # print(f'Contains isolated nodes: {d.contains_isolated_nodes()}')
+                # print(f'Contains self-loops: {d.contains_self_loops()}')
+                # print(f'Is undirected: {d.is_undirected()}')
+
                 safe_dict[name] = self.transform(d.clone())  # Make sure not to edit the originals
+
+        # Transform into pytorch dataset
+        out = []
+        for name, d in safe_dict.items():
+            d.id = idx
+            d.name = name
+            out.append(d)
+        return out
 
         # TODO generate some filter somhow
         return safe_dict

@@ -3,7 +3,6 @@ from tqdm import tqdm
 
 import datasetFacegen
 # from torch_geometric.data import DataLoader
-from torch.utils.data import DataLoader
 import utils
 import tripletutils
 import metrics
@@ -49,7 +48,10 @@ def train(cfg: Config):
 
     print("Loading DataLoader")
     # Note custom collate fn
-    dataloader = DataLoader(dataset=cfg.DATASET, batch_size=cfg.BATCH_SIZE, shuffle=True, num_workers=cfg.NUM_WORKERS, collate_fn=utils.list_collate_fn, drop_last=True)
+    # from torch.utils.data import DataLoader
+    # dataloader = DataLoader(dataset=cfg.DATASET, batch_size=cfg.BATCH_SIZE, shuffle=True, num_workers=cfg.NUM_WORKERS, collate_fn=utils.list_collate_fn, drop_last=True)
+    from torch_geometric.data import DataLoader
+    dataloader = DataLoader(dataset=cfg.DATASET, batch_size=cfg.BATCH_SIZE, shuffle=True, num_workers=cfg.NUM_WORKERS, drop_last=True)
 
     print("Staring")
     iter = 0
@@ -68,13 +70,34 @@ def train(cfg: Config):
 
             # TODO figure out what to do with dict
             # Ignore the metadata (names) of the idents
-            assert(isinstance(batch[0], dict))
-            batch = [list(b.values()) for b in batch]
+            # print(batch)
+            ###########
+            # assert IF USING SINGLE MOPDE
+            # assert(isinstance(batch[0], dict))
+            # batch = [list(b.values()) for b in batch]
 
-            descritors = []
-            for i in range(len(batch)):
-                ident = [model(d.to(device)) for d in batch[i]]
-                descritors.append(ident)
+            # descritors = []
+            # for i in range(len(batch)):
+            #     ident = [model(d.to(device)) for d in batch[i]]
+            #     descritors.append(ident)
+            import torch_geometric.data.batch as geometric_batch
+            datas = []
+            for b in batch:
+                datas += b.to_data_list()
+            # Batch(batch=[86016], id=[42], name=[42], pos=[86016, 3], ptr=[43])
+            batch_all = geometric_batch.Batch.from_data_list(datas)
+            descritors = model(batch_all.to(device))  # These descriptors are not [id,scan,desc] but [scan,desc] (1 dim istead of 2)
+            # Want to split into list based on id, which then contains all relevant descriptors
+            dic_descriptors = {}
+            for i in range(len(batch_all.id)):
+                id = batch_all.id[i].item()
+                if id in dic_descriptors:
+                    dic_descriptors[id].append(descritors[i])
+                else:
+                    dic_descriptors[id] = [descritors[i]]
+            descritors = list(dic_descriptors.values())
+
+
 
             # Første id: anchor og pos
             # Alle andre: Negative
@@ -82,25 +105,25 @@ def train(cfg: Config):
             for i in range(1, len(descritors)):
                 for m in descritors[i]:
                     negs.append(m)
-            anc = descritors[0][1].to("cpu").unsqueeze(0).expand(len(negs), -1)
-            pos = descritors[0][0].to("cpu").unsqueeze(0).expand(len(negs), -1)
-            negs = torch.stack(negs).to("cpu")
-            loss = criterion(anc, pos, negs)
-
+            anc = descritors[0][1].unsqueeze(0).expand(len(negs), -1)
+            pos = descritors[0][0].unsqueeze(0).expand(len(negs), -1)
+            # negs = torch.stack(negs)
+            # loss = criterion(anc, pos, negs) #  + max(torch.dist(anc[0], pos[0], p=2), 1) - 1
 
             # anchors, positives, negatives = tripletutils.findtriplets(descritors, accept_all=cfg.ALL_TRIPLETS)
             # loss = criterion(anchors, positives, negatives)
 
-            # # Unwrap from list for each ident, to a single long list with all
-            # all = []
-            # labels = []  # indencies for all, eks [0,0,0,1,1,2,2,3,3]
-            # for ident, listt in enumerate(descritors):
-            #     all += listt
-            #     labels += [ident] * len(listt)
-            #
-            # all = torch.stack(all).to("cpu")
-            # labels = torch.tensor(labels).to("cpu")
+            # Unwrap from list for each ident, to a single long list with all
+            all = []
+            labels = []  # indencies for all, eks [0,0,0,1,1,2,2,3,3]
+            for ident, listt in enumerate(descritors):
+                all += listt
+                labels += [ident] * len(listt)
+            
+            all = torch.stack(all).to("cpu")
+            labels = torch.tensor(labels).to("cpu")
             # loss, fraction_positive_triplets = onlineTripletLoss.batch_all_triplet_loss(labels=labels, embeddings=all, margin=1.0)
+            loss = onlineTripletLoss.batch_hard_triplet_loss(labels=labels, embeddings=all, margin=1.0)
 
 
 
@@ -109,10 +132,12 @@ def train(cfg: Config):
             if writer is not None:
                 writer.add_scalar('Loss/train', loss.item(), iter)
                 #writer.add_scalar('Pairs/train', len(anchors), iter)
-            if iter % 5 == 0:
-                tq.set_postfix(avg_loss=sum(losses)/max(len(losses), 1) ) #, fraction=fraction_positive_triplets.item()) #, pairs=len(anchors))
+            if iter % 3 == 0:  # var 5
+                with torch.no_grad():
+                    tq.set_postfix(avg_loss=sum(losses)/max(len(losses), 1), dist_a_p=torch.dist(anc[0].to("cpu"), all[0].to("cpu"), p=2).item())  #, fraction=fraction_positive_triplets.item()) #, pairs=len(anchors))
 
-            optimizer.zero_grad()
+
+            # optimizer.zero_grad()  # has one at the top
             loss.backward()
             optimizer.step()
 

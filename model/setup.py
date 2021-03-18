@@ -35,11 +35,11 @@ class Datasets:
 
 class Config:
     # General
-    EPOCHS = 40
-    BATCH_SIZE = 6  # Note, currently the triplet selector is n^2 * m^2, or n^2 if n >> m (batch size vs scans per id)
+    EPOCHS = 40*10
+    BATCH_SIZE = 40 # 15  # Note, currently the triplet selector is n^2 * m^2, or n^2 if n >> m (batch size vs scans per id)
 
     # Metrics
-    EPOCH_PER_METRIC = 10
+    EPOCH_PER_METRIC = 100 #10
 
     # Model
     import networkPointnet
@@ -55,7 +55,7 @@ class Config:
     ALL_TRIPLETS = True  # To allow soft triplets (loss=0) & to have a comparable loss, or else have comparable triplets
 
     # Optimizer
-    LR = 1e-3
+    LR = 5e-4
 
     # Dataset and Dataloader
     NUM_WORKERS = 1  # for the dataloader. As it is in memory, a high number is not needed

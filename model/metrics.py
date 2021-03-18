@@ -128,6 +128,9 @@ def get_base_metric_all_vs_all(margin: float, descriptor_dict):
     # Collapse the dict to one list
     for ident, ident_dict in descriptor_dict.items():
         for name, data in ident_dict.items():
+            tmp2 = name.split("_")[1]
+            if "03" in tmp2 or "04" in tmp2:
+                continue
             descriptors.append(data)
             label_ident.append(ident)
             label_name.append(name)
@@ -136,27 +139,33 @@ def get_base_metric_all_vs_all(margin: float, descriptor_dict):
     descriptors = torch.stack(descriptors)
     distances = onlineTripletLoss.pairwise_distances(embeddings=descriptors)
 
-    # TODO make in matrix notation?
-    # Check all vs all, same ID
-    length = descriptors.size()[0]
-    for idx1 in range(length):
-        for idx2 in range(idx1+1, length):  # Do not check it against previous checked (Half of matrix used only)
-            assert idx1 != idx2  # Do not check against itself
-            assert label_name[idx1] != label_name[idx2]  # Dont use label name for other than verification
+    margins = [0.1, 0.5, 1, 1.5, 2, 3, 4]
 
-            d = distances[idx1, idx2]
-            if label_ident[idx1] == label_ident[idx2]:
-                # Same Label, different ident
-                if d < margin:  # Good
-                    metrics.tp += 1
-                else:           # Bad
-                    metrics.fn += 1
-            else:
-                # Different label
-                if d >= margin:  # Good
-                    metrics.tn += 1
-                else:            # Bad
-                    metrics.fp += 1
+    for margin in margins:
+        metrics = BaseMetric(tp=0, fp=0, tn=0, fn=0)
+        # TODO make in matrix notation?
+        # Check all vs all, same ID
+        length = descriptors.size()[0]
+        for idx1 in range(length):
+            for idx2 in range(idx1+1, length):  # Do not check it against previous checked (Half of matrix used only)
+                assert idx1 != idx2  # Do not check against itself
+                assert label_name[idx1] != label_name[idx2]  # Dont use label name for other than verification
+
+
+                d = distances[idx1, idx2]
+                if label_ident[idx1] == label_ident[idx2]:
+                    # Same Label, different ident
+                    if d < margin:  # Good
+                        metrics.tp += 1
+                    else:           # Bad
+                        metrics.fn += 1
+                else:
+                    # Different label
+                    if d >= margin:  # Good
+                        metrics.tn += 1
+                    else:            # Bad
+                        metrics.fp += 1
+        print(f"margin:{margin}, {generate_score_metric_from_base(metrics)}")
 
     return metrics
 
@@ -164,9 +173,10 @@ def get_base_metric_all_vs_all(margin: float, descriptor_dict):
 # torch_geometric.utils.  accuracy, precision, recall, f1
 def get_metric_all_vs_all(margin: float, descriptor_dict):
     base_metric = get_base_metric_all_vs_all(margin=margin, descriptor_dict=descriptor_dict)
+    del descriptor_dict
     return generate_score_metric_from_base(base_metric)
 
 
-def get_metric_gallery_set_vs_probe_set(gallery_descriptors, probe_descriptors):
+def get_metric_gallery_set_vs_probe_set_BU3DFE(gallery_descriptors, probe_descriptors):
     base_metric = None
     return generate_score_metric_from_base(base_metric)
