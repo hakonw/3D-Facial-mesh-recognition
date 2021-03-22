@@ -88,7 +88,7 @@ def generate_score_metric_from_base(base_metric: BaseMetric):
     metrics.recall = tp / nonzero(tp + fn)  # Also called True positive rate or sensitivity
     metrics.f1 = 2 * (metrics.precision * metrics.recall) / nonzero(metrics.precision + metrics.recall)
     metrics.FRR = fn / nonzero(tp + fn)  # Also called FNR False negative rate
-    metrics.FAR = fp / nonzero(tn + tn)  # Also called FPR False positive rate
+    metrics.FAR = fp / nonzero(tn + fp)  # Also called FPR False positive rate POSSIBLY WRONG, FAR might be fp / total
     # Specificity (SPC) or True Negative Rate (TNR):    # SPC = TN / N = TN / (FP + TN)
     # Negative Predictive Value (NPV):     # NPV = TN / (TN + FN)
     # Fall-Out or False Positive Rate (FPR):    # FPR = FP / N = FP / (FP + TN) =1 – SPC
@@ -177,6 +177,87 @@ def get_metric_all_vs_all(margin: float, descriptor_dict):
     return generate_score_metric_from_base(base_metric)
 
 
-def get_metric_gallery_set_vs_probe_set_BU3DFE(gallery_descriptors, probe_descriptors):
-    base_metric = None
-    return generate_score_metric_from_base(base_metric)
+# Function to split the bu3dfe data
+def get_metric_gallery_set_vs_probe_set_BU3DFE(descriptor_dict):
+    gallery_dict = {}
+    probe_dict = {}
+    for ident in descriptor_dict.keys():
+        gallery_dict[ident] = {}
+        probe_dict[ident] = {}
+
+    for ident, ident_dict in descriptor_dict.items():
+        for name, data in ident_dict.items():
+            expression_scale = name.split("_")[1]
+            # If they are neutral or as neutral almost neutral, add them to gallery
+            if "00" in expression_scale or "01" in expression_scale:
+                gallery_dict[ident][name] = data
+            else:
+                probe_dict[ident][name] = data
+
+    return get_metric_gallery_set_vs_probe_set(gallery_dict, probe_dict)
+
+
+def get_metric_gallery_set_vs_probe_set(gallery_descriptors_dict, probe_descriptors_dict):
+    
+    gal_descriptors = []
+    gal_ident = []
+    gal_name = []
+    for ident, ident_dict in gallery_descriptors_dict.items():
+            for name, data in ident_dict.items():
+                gal_descriptors.append(data)
+                gal_ident.append(ident)
+                gal_name.append(name)
+
+    probe_descriptors = []
+    probe_ident = []
+    probe_name = []
+    for ident, ident_dict in probe_descriptors_dict.items():
+            for name, data in ident_dict.items():
+                probe_descriptors.append(data)
+                probe_ident.append(ident)
+                probe_name.append(name)
+
+
+    gal_descriptors = torch.stack(gal_descriptors)
+    probe_descriptors = torch.stack(probe_descriptors)
+
+    # Want to create a matrix, where each row is for a garllery descriptor, and each col is for a probe descriptor 
+    distances = torch.cdist(gal_descriptors, probe_descriptors, p=2)
+
+    # Transpose to make the math prettier, so now its [probe, gal]  TODO switch the generation instead?
+    distances = torch.transpose(distances, 0, 1)
+    # for each probe ident, find the rank-1
+    idxs_min = torch.argmin(distances, dim=1)  # Iterate over all rows, and find the indices of the smallest number
+
+    metrics = BaseMetric(tp=0, fp=0, tn=0, fn=0)
+
+    for probe_idx, min_gal_idx in enumerate(idxs_min):
+        assert probe_name[probe_idx] != gal_name[min_gal_idx]  # Assert that the same face is not in both datasets
+        if probe_ident[probe_idx] == gal_ident[min_gal_idx]:
+            metrics.tp += 1  # Good, correct ident
+        else:
+            metrics.fp += 1  # Bad, not corrent ident
+
+    # TODO fix abusement of base metric
+    return generate_score_metric_from_base(metrics)
+
+
+
+if __name__ == "__main__":
+    gallery_descriptors = torch.tensor([[1.0, 1.0], [2.0,2.0], [4.0,4.0], [5.0, 5.0]])
+    print("gal", gallery_descriptors.shape)
+    probe_descriptors = torch.tensor([[0.0, 0.0], [3.0,2.0]])
+    print("prob", probe_descriptors.shape)
+
+    distances = torch.cdist(gallery_descriptors, probe_descriptors, p=2)
+    print(distances)
+
+    for i in range(len(gallery_descriptors)):
+        for j in range(len(probe_descriptors)):
+            value = torch.isclose(distances[i][j], torch.dist(gallery_descriptors[i], probe_descriptors[j])).item()
+            assert(value)
+
+    distances = torch.transpose(distances, 0, 1)
+    print(distances)
+    idxs_min = torch.argmin(distances, dim=1)
+    print(idxs_min)
