@@ -64,8 +64,8 @@ class Net(torch.nn.Module):
         self.sa3_module = GlobalSAModule(MLP([256 + 3, 256, 512, 1024]))
 
         self.lin1 = Lin(1024, 512)
-        self.lin2 = Lin(512, 512)
-        self.lin3 = Lin(512, 512)
+        self.lin2 = Lin(512, 256)
+        self.lin3 = Lin(256, 256)
         self.flatten = Flatten(start_dim=0)  # Special start dim as it is not yet batched
         self.flatten_batched = Flatten()
 

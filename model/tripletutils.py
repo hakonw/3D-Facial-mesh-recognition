@@ -5,7 +5,7 @@ import onlineTripletLoss
 # Functions used to generate triplets
 # TODO pairs as input is wrong (too restrictive), fix sometime
 # TODO also replace with the onlinetripletloss?
-def findtriplets(pairs, req_distance=1.0, accept_all=True):
+def findtriplets(pairs, req_distance, accept_all=True):
     assert len(pairs) > 1
     valid_triplets = []
 

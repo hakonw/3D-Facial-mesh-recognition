@@ -12,7 +12,14 @@ class Datasets:
     DATASET_EDGE = False
 
     # POST_TRANSFORM = T.Compose([T.NormalizeScale(), T.SamplePoints(num=2048)])
-    POST_TRANSFORM = T.Compose([T.SamplePoints(num=2048)])
+    POST_TRANSFORM = T.Compose([
+        T.SamplePoints(num=2048),
+        #T.NormalizeScale(),
+        T.RandomTranslate(0.01),
+        T.RandomRotate(degrees=10, axis=0),
+        T.RandomRotate(degrees=10, axis=1),
+        T.RandomRotate(degrees=10, axis=2)
+        ])
 
     # Facegen Dataset
     @staticmethod
@@ -35,8 +42,8 @@ class Datasets:
 
 class Config:
     # General
-    EPOCHS = 40*10
-    BATCH_SIZE = 40 # 15  # Note, currently the triplet selector is n^2 * m^2, or n^2 if n >> m (batch size vs scans per id)
+    EPOCHS = 40*10*2
+    BATCH_SIZE = 33 # 15  # Note, currently the triplet selector is n^2 * m^2, or n^2 if n >> m (batch size vs scans per id)
 
     # Metrics
     EPOCH_PER_METRIC = 100 #10
@@ -55,10 +62,12 @@ class Config:
     ALL_TRIPLETS = True  # To allow soft triplets (loss=0) & to have a comparable loss, or else have comparable triplets
 
     # Optimizer
-    LR = 5e-4
+    LR = 1e-3
 
     # Dataset and Dataloader
-    NUM_WORKERS = 1  # for the dataloader. As it is in memory, a high number is not needed
+    NUM_WORKERS = 0  # for the dataloader. As it is in memory, a high number is not needed, set to 0 if file desc errors https://pytorch.org/docs/stable/data.html
+      # Alt,  check out   lsof | awk '{ print $2; }' | uniq -c | sort -rn | head
+      # and               ulimit -n 4096
     # DATASET = Datasets.DATASET_FACEGEN
     # DATASET_HELPER = Datasets.FACEGEN_HELPER
     # DATASET = Datasets.DATASET_BU3DGE

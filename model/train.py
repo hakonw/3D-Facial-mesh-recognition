@@ -3,6 +3,8 @@ from tqdm import tqdm
 
 import datasetFacegen
 # from torch_geometric.data import DataLoader
+import torch_geometric.data.batch as geometric_batch
+
 import utils
 import tripletutils
 import metrics
@@ -59,6 +61,7 @@ def train(cfg: Config):
         tq = tqdm(enumerate(dataloader), desc=f"Epoch {epoch}/{cfg.EPOCHS}", leave=cfg.LEAVE_TQDM)
 
         losses = []
+        dist_a_ps = []
         for i_batch, batch in tq:
             optimizer.zero_grad()
 
@@ -80,7 +83,6 @@ def train(cfg: Config):
             # for i in range(len(batch)):
             #     ident = [model(d.to(device)) for d in batch[i]]
             #     descritors.append(ident)
-            import torch_geometric.data.batch as geometric_batch
             datas = []
             for b in batch:
                 datas += b.to_data_list()
@@ -98,7 +100,9 @@ def train(cfg: Config):
             descritors = list(dic_descriptors.values())
 
 
-
+            # # # # # # # # # # # # # # # # # # # # # # # # # # #
+            #   ALT 1, dirty, match first ident to the others   #
+            # # # # # # # # # # # # # # # # # # # # # # # # # # #
             # Første id: anchor og pos
             # Alle andre: Negative
             negs = []
@@ -110,9 +114,17 @@ def train(cfg: Config):
             # negs = torch.stack(negs)
             # loss = criterion(anc, pos, negs) #  + max(torch.dist(anc[0], pos[0], p=2), 1) - 1
 
-            # anchors, positives, negatives = tripletutils.findtriplets(descritors, accept_all=cfg.ALL_TRIPLETS)
+
+            # # # # # # # # # # # # # # # # # # # # # # # # # #
+            #  ALT 2, self made triplet loss (every triplet)  #
+            # # # # # # # # # # # # # # # # # # # # # # # # # #
+            # anchors, positives, negatives = tripletutils.findtriplets(descritors, req_distance=cfg.MARGIN accept_all=cfg.ALL_TRIPLETS)
             # loss = criterion(anchors, positives, negatives)
 
+
+            # # # # # # # # # # # # # # # # # # # # # # #
+            #   ALT 3, online triplet loss from github  #
+            # # # # # # # # # # # # # # # # # # # # # # #
             # Unwrap from list for each ident, to a single long list with all
             all = []
             labels = []  # indencies for all, eks [0,0,0,1,1,2,2,3,3]
@@ -122,34 +134,40 @@ def train(cfg: Config):
             
             all = torch.stack(all).to("cpu")
             labels = torch.tensor(labels).to("cpu")
-            # loss, fraction_positive_triplets = onlineTripletLoss.batch_all_triplet_loss(labels=labels, embeddings=all, margin=1.0)
-            loss = onlineTripletLoss.batch_hard_triplet_loss(labels=labels, embeddings=all, margin=1.0)
+            # loss, fraction_positive_triplets = onlineTripletLoss.batch_all_triplet_loss(labels=labels, embeddings=all, margin=cfg.MARGIN)
+            loss = onlineTripletLoss.batch_hard_triplet_loss(labels=labels, embeddings=all, margin=cfg.MARGIN)
 
-
-
+            # Per iteration writing and tdqm update
             iter += 1
             losses.append(loss.item())
+            dist_a_ps.append(torch.dist(anc[0].to("cpu"), all[0].to("cpu"), p=2).item())
             if writer is not None:
                 writer.add_scalar('Loss/train', loss.item(), iter)
+                writer.add_scalar('Loss/avg_dist_a_p', dist_a_ps[-1], iter)
                 #writer.add_scalar('Pairs/train', len(anchors), iter)
             if iter % 3 == 0:  # var 5
                 with torch.no_grad():
-                    tq.set_postfix(avg_loss=sum(losses)/max(len(losses), 1), dist_a_p=torch.dist(anc[0].to("cpu"), all[0].to("cpu"), p=2).item())  #, fraction=fraction_positive_triplets.item()) #, pairs=len(anchors))
-
+                    tq.set_postfix(
+                        avg_loss=sum(losses)/max(len(losses), 1),
+                        dist_a_p=sum(dist_a_ps)/max(len(dist_a_ps), 1)
+                        #, fraction=fraction_positive_triplets.item()
+                      )
 
             # optimizer.zero_grad()  # has one at the top
             loss.backward()
             optimizer.step()
 
         # Metrics
-        if (epoch + 1) % cfg.EPOCH_PER_METRIC == 0:
-            descriptor_dict = metrics.data_dict_to_descriptor_dict(model=model, device=device, data_dict=cfg.DATASET_HELPER.get_cached_dataset(), desc="Evaluation/Test", leave_tqdm=False)
-            metric = metrics.get_metric_all_vs_all(margin=1.0, descriptor_dict=descriptor_dict)
-            print(metric)
-            metric_dict = dataclasses.asdict(metric)
-            for metric_key in metric_dict.keys():
-                if writer is not None:
-                    writer.add_scalar("metric-" + metric_key + "/train", metric_dict[metric_key], iter)
+        with torch.no_grad():
+            if (epoch + 1) % cfg.EPOCH_PER_METRIC == 0:
+                descriptor_dict = metrics.data_dict_to_descriptor_dict(model=model, device=device, data_dict=cfg.DATASET_HELPER.get_cached_dataset(), desc="Evaluation/Test", leave_tqdm=False)
+                print("RANK-1", metrics.get_metric_gallery_set_vs_probe_set_BU3DFE(descriptor_dict))
+                metric = metrics.get_metric_all_vs_all(margin=cfg.MARGIN, descriptor_dict=descriptor_dict)
+                print(metric)
+                metric_dict = dataclasses.asdict(metric)
+                for metric_key in metric_dict.keys():
+                    if writer is not None:
+                        writer.add_scalar("metric-" + metric_key + "/train", metric_dict[metric_key], iter)
 
         if writer is not None:
             writer.add_scalar('AverageEpochLoss/train', sum(losses)/len(losses), epoch)
@@ -157,7 +175,7 @@ def train(cfg: Config):
 
     print("Beginning metrics")
     descriptor_dict = metrics.data_dict_to_descriptor_dict(model=model, device=device, data_dict=cfg.DATASET_HELPER.get_cached_dataset())
-    final_metrics = metrics.get_metric_all_vs_all(margin=1.0, descriptor_dict=descriptor_dict)
+    final_metrics = metrics.get_metric_all_vs_all(margin=cfg.MARGIN, descriptor_dict=descriptor_dict)
     print(final_metrics)
 
     # TODO the sub-section to own file
