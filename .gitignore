@@ -2,6 +2,8 @@
 *.ply
 *.obj
 *.wrl
+*.pse
+*.off
 
 # Pickle files
 *.p
