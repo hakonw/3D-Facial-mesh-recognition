@@ -8,13 +8,15 @@ import onlineTripletLoss
 # Processing of data before metrics
 #
 
+import setup
 
 @torch.no_grad()  # This function disables autograd, so no training can be done on the data
 def single_data_to_descriptor(model, device, data):
+    data = setup.Datasets.POST_TRANSFORM(data)
     data.to(device)
     # Assuming single data, ergo dont need to do .to_data_list()
     descriptor = model(data)
-    descriptor.to("cpu")  # Results are returned to the cpu, as ASAPooling with grad would use over 12gb memory
+    descriptor.to("cpu")  # Results are returned to the cpu
     return descriptor
 
 
@@ -22,6 +24,7 @@ def single_data_to_descriptor(model, device, data):
 # : dict[str, dict[str, [Data]]
 def data_dict_to_descriptor_dict(model, device, data_dict, desc="Evaluation", leave_tqdm=True):
     descriptor_dict = {}
+    model.eval()
 
     for key, data_list in tqdm(data_dict.items(), desc=desc, leave=leave_tqdm):
         assert isinstance(data_list, dict)
@@ -30,6 +33,7 @@ def data_dict_to_descriptor_dict(model, device, data_dict, desc="Evaluation", le
             desc_dict[name] = single_data_to_descriptor(model, device, data.clone())
 
         descriptor_dict[key] = desc_dict
+    model.train()
     return descriptor_dict
 
 
@@ -67,6 +71,9 @@ class ScoreMetric(BaseMetric):
         return f"ScoreMetric(tp={self.tp}, fp={self.fp}, tn={self.tn}, fn={self.fn}, " + \
                f"acc={self.accuracy:.4f}, preci={self.precision:.3f} recall={self.recall:.3f}, f1={self.f1:.3f}, " + \
                f"FRR={self.FRR:.3f}, FAR={self.FAR:.3f})"
+
+    def __str_short__(self):
+        return f"ScoreMetric(tp={self.tp}, fp={self.fp}, acc={self.accuracy:.4f})"
 
 
 # TODO make into part of class?
@@ -139,7 +146,7 @@ def get_base_metric_all_vs_all(margin: float, descriptor_dict):
     descriptors = torch.stack(descriptors)
     distances = onlineTripletLoss.pairwise_distances(embeddings=descriptors)
 
-    margins = [0.1, 0.5, 1, 1.5, 2, 3, 4]
+    margins = [0.1, 0.2, 0.5, 1.0, 1.5, 2, 3]
 
     for margin in margins:
         metrics = BaseMetric(tp=0, fp=0, tn=0, fn=0)
@@ -218,8 +225,8 @@ def get_metric_gallery_set_vs_probe_set(gallery_descriptors_dict, probe_descript
                 probe_name.append(name)
 
 
-    gal_descriptors = torch.stack(gal_descriptors)
-    probe_descriptors = torch.stack(probe_descriptors)
+    gal_descriptors = torch.squeeze(torch.stack(gal_descriptors))
+    probe_descriptors = torch.squeeze(torch.stack(probe_descriptors))
 
     # Want to create a matrix, where each row is for a garllery descriptor, and each col is for a probe descriptor 
     distances = torch.cdist(gal_descriptors, probe_descriptors, p=2)
@@ -241,6 +248,26 @@ def get_metric_gallery_set_vs_probe_set(gallery_descriptors_dict, probe_descript
     # TODO fix abusement of base metric
     return generate_score_metric_from_base(metrics)
 
+
+@torch.no_grad()
+def generate_descriptor_dict_from_dataloader(model, dataloader, device):
+    # dataloader_test = DataLoader(dataset=cfg.DATASET, batch_size=10, shuffle=False, num_workers=0, drop_last=False)
+    model.eval()
+
+    descriptor_dict = {}
+    for larger_batch in dataloader:
+        for batch in larger_batch:
+            batch = batch.to(device)
+            output = model(batch).to("cpu")
+
+            ids = batch.id.tolist()
+            names = batch.name
+            for idx, id in enumerate(ids):
+                if id not in descriptor_dict:
+                    descriptor_dict[id] = {}
+                descriptor_dict[id][names[idx]] = output[idx]
+
+    return descriptor_dict
 
 
 if __name__ == "__main__":

@@ -11,5 +11,9 @@
 # Folders
 .idea/
 __pycache__/
+.vscode/
 log/
 experiment*/
+data/
+src/
+save/

@@ -164,8 +164,13 @@ def batch_hard_triplet_loss(labels, embeddings, margin, squared=False, device='c
     tl = hardest_positive_dist - hardest_negative_dist + margin
     tl[tl < 0] = 0
     triplet_loss = tl.mean()
+    
+    with torch.no_grad():
+        max_dist_a_p = torch.max(hardest_positive_dist)
+        min_dist_a_n = torch.min(hardest_negative_dist)
+        max_loss = torch.max(tl)
 
-    return triplet_loss
+    return triplet_loss, max_loss, max_dist_a_p, min_dist_a_n
 
 
 # Cell

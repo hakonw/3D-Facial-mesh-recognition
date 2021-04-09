@@ -11,14 +11,14 @@ class Datasets:
     DATASET_SAVE = True
     DATASET_EDGE = False
 
-    # POST_TRANSFORM = T.Compose([T.NormalizeScale(), T.SamplePoints(num=2048)])
     POST_TRANSFORM = T.Compose([
-        T.SamplePoints(num=2048),
-        #T.NormalizeScale(),
-        T.RandomTranslate(0.01),
-        T.RandomRotate(degrees=10, axis=0),
-        T.RandomRotate(degrees=10, axis=1),
-        T.RandomRotate(degrees=10, axis=2)
+        T.FaceToEdge(remove_faces=True),
+        T.NormalizeScale(),
+        # T.SamplePoints(num=1024),
+        # T.RandomTranslate(0.005),
+        # T.RandomRotate(degrees=10, axis=0),
+        # T.RandomRotate(degrees=10, axis=1),
+        # T.RandomRotate(degrees=10, axis=2)
         ])
 
     # Facegen Dataset
@@ -43,7 +43,7 @@ class Datasets:
 class Config:
     # General
     EPOCHS = 40*10*2
-    BATCH_SIZE = 33 # 15  # Note, currently the triplet selector is n^2 * m^2, or n^2 if n >> m (batch size vs scans per id)
+    BATCH_SIZE = 5 # 15  # Note, currently the triplet selector is n^2 * m^2, or n^2 if n >> m (batch size vs scans per id)
 
     # Metrics
     EPOCH_PER_METRIC = 100 #10
@@ -54,7 +54,7 @@ class Config:
     # MODEL = network.PrelimNet()  # TestNet (new) or PrelimNet (old)
 
     # Loss function
-    MARGIN = 1.0
+    MARGIN = 0.3
     P = 2
     REDUCTION = "mean"  # mean or sum (or other, see pytorch doc)
 
