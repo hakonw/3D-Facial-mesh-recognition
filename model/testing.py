@@ -528,7 +528,7 @@ class TestNet55_desc(torch.nn.Module):
         self.conv3 = GCNConv(in_channels=94, out_channels=128)
         self.batch3 = BatchNorm(in_channels=self.conv3.out_channels)
 
-        # self.conv4 = GCNConv(in_channels=128, out_channels=256)
+        # self.conv4 = GCNConv(in_channels=256, out_channels=512)
         # self.batch4 = BatchNorm(in_channels=self.conv4.out_channels)
 
         # self.conv5 = GCNConv(in_channels=256, out_channels=512)
@@ -539,7 +539,7 @@ class TestNet55_desc(torch.nn.Module):
         self.fc0 = Linear(128, 128)
 
         self.fc1 = Linear(128, 128)
-        # self.fc2 = Linear(256, 128)
+        self.fc2 = Linear(128, 128)
         self.fc3 = Linear(128, 100)
 
 
@@ -567,23 +567,29 @@ class TestNet55_desc(torch.nn.Module):
         x = self.batch3(x)
         x = self.activation(x)
 
+        x = self.fc0(x)
+        x = self.activation(x)
+
         # x = self.conv4(x, edge_index)
         # x = self.batch4(x)
         # x = self.activation(x)
 
-        x = self.fc0(x)
-        x = self.activation(x)
+
 
         # x = self.conv5(x, edge_index)
         # x = self.batch5(x)
         # x = self.activation(x)
-                
+        # print("d", data)
+        # print("d0", data.get_example(0))
+        # print("pre scatter", x.shape)
         x = scatter(x, batch, dim=0)  # Unsure if the correct
+        # print("post scatter", x.shape)
         # return scatter(x, batch, dim=0, dim_size=x.shape[0], reduce='add') ?
+        # x = global_max_pool(x, batch)
 
         x = self.activation(self.fc1(x))
         # x = F.dropout(x, p=0.5, training=self.training)
-        # x = self.activation(self.fc2(x))
+        x = self.activation(self.fc2(x))
         x = self.fc3(x)
         # x = F.normalize(x, dim=-1, p=2)  # L2 Normalization tips
         return x
@@ -707,7 +713,7 @@ def test_5_convnet_triplet():
     # model.load_state_dict(torch.load("./Testnet55_desc-triplet-128desc-500.pt"))
     # start_epoch += 500
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
     # optimizer = torch.optim.SGD(model.parameters(), lr=1e-25)
     # loss = ||ap|| - ||an|| + margin.  neg loss => ||an|| >>> ||ap||, at least margin over
 
@@ -716,6 +722,7 @@ def test_5_convnet_triplet():
     # critering used in naive approach
     criterion = torch.nn.TripletMarginLoss(margin=margin)  # https://pytorch.org/docs/stable/generated/torch.nn.TripletMarginLoss.html#torch.nn.TripletMarginLoss   mean or sum reduction possible
 
+    LOG = ask_for_writer(dataloader, optimizer)
     print(f"dataloader_batch: {dataloader.batch_size}, optimizer: {optimizer.state_dict()['param_groups'][0]['lr']}")
     for epoch in range(start_epoch, 500):
         losses, dist_a_p, dist_a_n, lengths, max_losses, max_dist_a_ps, min_dist_a_ns = train5(epoch, model, device, dataloader, optimizer, margin, criterion)
@@ -728,6 +735,18 @@ def test_5_convnet_triplet():
         print(f"Epoch:{epoch}, avg_loss: {avg_loss:.4f}, dist_a_p: {dist_a_p:.4f}, dist_a_n: {dist_a_n:.4f}, avg_desc_length: {(sum(lengths)/len(lengths)):.2f}, max_loss: {max(max_losses):.4f}, max_dist_a_p: {max(max_dist_a_ps):.4f}, min_dist_a_n: {min(min_dist_a_ns):.4f}")
         # print(f"Epoch:{epoch}, avg_loss: {avg_loss:.4f}, dist_a_p: {dist_a_p:.4f}, dist_a_n: {dist_a_n:.4f}")
         z = 0.00001
+
+        LOG.add_scalar("Loss/train-avg", avg_loss, epoch)
+        LOG.add_scalar("Distance/anchor-positive", dist_a_p, epoch)
+        LOG.add_scalar("Distance/anchor-negative", dist_a_n, epoch)
+        try:
+            LOG.add_scalar("Loss/train-max", max(max_losses), epoch)
+            LOG.add_scalar("Distance/max-anchor-positive", max(max_dist_a_ps), epoch)
+            LOG.add_scalar("Distance/min-anchor-negative", min(min_dist_a_ns), epoch)
+            LOG.add_scalar("Distance/length", min(min_dist_a_ns), epoch)
+        except:
+            pass
+
         if dist_a_p < z and dist_a_n < z and margin - 10*z < avg_loss < margin + 10*z:
             print("Stopping due to collapse of descriptors"); import sys; sys.exit(-1)
         if math.isnan(avg_loss):
@@ -738,10 +757,16 @@ def test_5_convnet_triplet():
                 model.eval()
                 # descriptor_dict = metrics.data_dict_to_descriptor_dict(model=model, device=device, data_dict=cfg.DATASET_HELPER.get_cached_dataset(), desc="Evaluation/Test", leave_tqdm=False)
                 descriptor_dict = metrics.generate_descriptor_dict_from_dataloader(model=model, dataloader=dataloader_test, device=device)
-                print("RANK-1-testdata", metrics.get_metric_gallery_set_vs_probe_set_BU3DFE(descriptor_dict).__str_short__())
+                metric = metrics.get_metric_gallery_set_vs_probe_set_BU3DFE(descriptor_dict)
+                print("RANK-1-valdata", metric.__str_short__())
+                for m in ["tp", "fp", "accuracy"]:
+                    LOG.add_scalar("metric-" + m + "/val", getattr(metric, m), epoch)
                 
                 descriptor_dict = metrics.generate_descriptor_dict_from_dataloader(model=model, dataloader=dataloader_val, device=device)
-                print("RANK-1-traindata", metrics.get_metric_gallery_set_vs_probe_set_BU3DFE(descriptor_dict).__str_short__())
+                metric = metrics.get_metric_gallery_set_vs_probe_set_BU3DFE(descriptor_dict)
+                print("RANK-1-traindata", metric.__str_short__())
+                for m in ["tp", "fp", "accuracy"]:
+                    LOG.add_scalar("metric-" + m + "/train", getattr(metric, m), epoch)
 
         # if epoch % 100 == 0:
         #     name = f"./Testnet55_desc-triplet-128desc-8020-{epoch}.pt"
@@ -888,6 +913,35 @@ def test_6_softmax_embeddings():
             torch.save(model.state_dict(), name)
 
 
+# ask_for_writer(dataloader, optimizer)
+def ask_for_writer(dataloader, optimizer):
+    batch_size = dataloader.batch_size
+    lr = optimizer.state_dict()['param_groups'][0]['lr']
+    import inspect
+    function_name = inspect.stack()[1][3]
+
+    from datetime import date
+    dato = date.today().strftime("%Y-%m-%d")
+
+    import sys
+    if len(sys.argv) > 1:
+        extra = sys.argv[1]
+    else:
+        extra = input("Siste endringer: ")
+
+    if extra == "q" or not extra:
+        print("Logging disabled")
+        class Dummy:
+            def add_scalar(*args):
+                return
+        return Dummy()
+
+    navn = f"{str(dato)}_lr{lr:1.0e}_batchsize{batch_size}_{extra.replace(' ', '-')}"
+    import os
+    from torch.utils.tensorboard import SummaryWriter
+    WRITER = SummaryWriter(log_dir=os.path.join("logging", navn), max_queue=20)
+    print("Logging enabled: " + navn)
+    return WRITER
 
 if __name__ == '__main__':
     print(f"Cuda: {torch.cuda.is_available()}")

@@ -75,6 +75,8 @@ class ScoreMetric(BaseMetric):
     def __str_short__(self):
         return f"ScoreMetric(tp={self.tp}, fp={self.fp}, acc={self.accuracy:.4f})"
 
+    def __dict_keys_short__(self):
+        return ["tp", "fp", "accuracy"]
 
 # TODO make into part of class?
 def generate_score_metric_from_base(base_metric: BaseMetric):
