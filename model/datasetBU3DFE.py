@@ -130,7 +130,6 @@ class BU3DFEDataset(Dataset):  # This does not need to be of type Dataset
                 # print(f'Contains isolated nodes: {d.contains_isolated_nodes()}')
                 # print(f'Contains self-loops: {d.contains_self_loops()}')
                 # print(f'Is undirected: {d.is_undirected()}')
-
                 safe_dict[name] = self.transform(d.clone())  # Make sure not to edit the originals
 
         # Transform into pytorch dataset
