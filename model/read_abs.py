@@ -1,9 +1,15 @@
 import numpy as np
-
+import gzip
 
 def read_abs_raw(filename):
     f = open(filename, "r")
-    
+    return read_abs_raw_pointer(f)
+
+def read_abs_raw_gzip(filename):
+    f = gzip.open(filename, "r")
+    return read_abs_raw_pointer(f)
+
+def read_abs_raw_pointer(f):
     # The matlab code is terrible imo, and this is more restrictive
     line = f.readline().rstrip().split()
     rows = int(line[0])
@@ -17,7 +23,7 @@ def read_abs_raw(filename):
     f.readline()
 
     # FL: is the flags vector specifying if a point is valid
-    flags = np.loadtxt(f, dtype=np.uint16, max_rows=1)
+    flags = np.loadtxt(f, dtype=np.uint8, max_rows=1)
     assert(flags.shape[0] == rows*colums)
     # print("flags:", flags.shape)
 
@@ -52,4 +58,4 @@ if __name__ == "__main__":
 
     tri = Trimesh(vertices=reduced_data, faces=spatial.simplices)
     tri = reduction_transform.simplify_trimesh(tri, 2048, 2)
-    tri.export("02463d452-reduced.ply")
+    # tri.export("02463d452-reduced.ply")
