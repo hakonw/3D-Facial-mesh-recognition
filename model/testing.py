@@ -1,3 +1,4 @@
+from os import posix_fadvise
 import os.path as osp
 
 import torch
@@ -103,6 +104,9 @@ class Net(torch.nn.Module):
 # Test 1
 
 def train(epoch, dataloader, optimizer):
+    model = None 
+    train_loader = None 
+    device = None
     model.train()
 
     losses = []
@@ -118,6 +122,8 @@ def train(epoch, dataloader, optimizer):
     return losses
 
 def test(loader):
+    model = None
+    device = None
     model.eval()
 
     correct = 0
@@ -145,6 +151,7 @@ def test_1_regular_poitnet():
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
     for epoch in range(1, 201):
+        dataloader = None
         losses = train(epoch, dataloader, optimizer)
         avg_loss = sum(losses)/len(losses)
         test_acc = test(test_loader)
@@ -525,7 +532,7 @@ class TestNet55_desc(torch.nn.Module):
         self.conv2 = GCNConv(in_channels=64, out_channels=94)
         self.batch2 = BatchNorm(in_channels=self.conv2.out_channels)
 
-        self.conv3 = GCNConv(in_channels=94, out_channels=128)
+        self.conv3 = GCNConv(in_channels=94, out_channels=256)
         self.batch3 = BatchNorm(in_channels=self.conv3.out_channels)
 
         # self.conv4 = GCNConv(in_channels=256, out_channels=512)
@@ -536,7 +543,7 @@ class TestNet55_desc(torch.nn.Module):
 
         # self.pooling1 = TopKPooling(in_channels=1, ratio=1024)
 
-        self.fc0 = Linear(128, 128)
+        self.fc0 = Linear(256, 128)
 
         self.fc1 = Linear(128, 128)
         self.fc2 = Linear(128, 128)
@@ -579,21 +586,114 @@ class TestNet55_desc(torch.nn.Module):
         # x = self.conv5(x, edge_index)
         # x = self.batch5(x)
         # x = self.activation(x)
-        # print("d", data)
-        # print("d0", data.get_example(0))
-        # print("pre scatter", x.shape)
-        x = scatter(x, batch, dim=0)  # Unsure if the correct
-        # print("post scatter", x.shape)
-        # return scatter(x, batch, dim=0, dim_size=x.shape[0], reduce='add') ?
+        # x = torch.stack(torch.split(x, batch.size(0)//data.num_graphs, 0))
+        # x = torch.flatten(x, 1, 2)
+
+        x = scatter(x, batch, dim=0) # , reduce="mean")  # Unsure if the correct
+        # print(scatter(x, batch, dim=0, dim_size=x.shape[0], reduce='add'))
         # x = global_max_pool(x, batch)
 
         x = self.activation(self.fc1(x))
-        # x = F.dropout(x, p=0.5, training=self.training)
+        # x = F.dropout(x, p=0.1, training=self.training)
         x = self.activation(self.fc2(x))
         x = self.fc3(x)
         # x = F.normalize(x, dim=-1, p=2)  # L2 Normalization tips
         return x
         # return F.log_softmax(x, dim=-1)
+
+
+class TestNet55_descv2(torch.nn.Module):
+    def __init__(self):
+        super(TestNet55_descv2, self).__init__()
+        torch.manual_seed(1)
+        torch.cuda.manual_seed(1)
+
+        self.activation = ReLU()
+
+        # org: 3,64,128,128,256,512,pool,512,256,256,128
+        self.conv1 = GCNConv(in_channels=3, out_channels=16)
+        self.batch1 = BatchNorm(in_channels=self.conv1.out_channels)
+
+        self.conv11 = GCNConv(in_channels=16, out_channels=32)
+        self.batch11 = BatchNorm(in_channels=self.conv11.out_channels)
+
+        self.conv12 = GCNConv(in_channels=32, out_channels=64)
+        self.batch12 = BatchNorm(in_channels=self.conv12.out_channels)
+
+        self.conv2 = GCNConv(in_channels=64, out_channels=94)
+        self.batch2 = BatchNorm(in_channels=self.conv2.out_channels)
+
+        self.conv3 = GCNConv(in_channels=94, out_channels=256)
+        self.batch3 = BatchNorm(in_channels=self.conv3.out_channels)
+
+        # self.pooling1 = TopKPooling(in_channels=1, ratio=512)
+
+        self.fc0 = Linear(256, 128)
+
+        self.fc1 = Linear(128, 128)
+        self.fc2 = Linear(128, 128)
+        self.fc3 = Linear(128, 128)
+
+    def forward(self, data):
+        if isinstance(data, Batch):  # Batch before data, as a batch is a data
+            pos, edge_index, batch = data.pos, data.edge_index, data.batch
+        elif isinstance(data, Data):
+            batch = torch.zeros(data.pos.size(
+                0), dtype=torch.long, device=data.pos.device)
+            pos, edge_index, batch = data.pos, data.edge_index, batch
+        else:
+            raise RuntimeError(f"Illegal data of type: {type(data)}")
+        x = pos
+
+        x = self.conv1(x, edge_index)
+        x = self.batch1(x)
+        x = self.activation(x)
+
+        x = self.activation(self.batch11(self.conv11(x, edge_index)))
+        x = self.activation(self.batch12(self.conv12(x, edge_index)))
+
+        x = self.conv2(x, edge_index)
+        x = self.batch2(x)
+        x = self.activation(x)
+
+        x = self.conv3(x, edge_index)
+        x = self.batch3(x)
+        x = self.activation(x)
+
+        x = self.activation(self.fc0(x))  # Per node fc
+        
+        # x = scatter(x, batch, dim=0, reduce="max") # , reduce="mean")  # Unsure if the correct
+        # print(scatter(x, batch, dim=0, dim_size=x.shape[0], reduce='add'))
+        x = global_max_pool(x, batch)
+
+
+        # preshape = x.shape[0]  # torch.Size([476160, 128])
+        # x = torch.stack(torch.split(x, batch.size(0)//data.num_graphs, 0))
+        # assert preshape == x.shape[0] * x.shape[1] # torch.Size([465, 1024, 128])
+
+        # D: Not
+        # x = torch.flatten(x, 1, 2)  # torch.Size([465, 131072])
+
+        # A: Maxpool per node
+        # print(torch.max(x, dim=2)[0].shape) torch.Size([450, 1024])
+        # x = torch.max(x, dim=2)[0]
+
+        # B: Maxpool per filter
+        # print(torch.max(x, dim=1)[0].shape) torch.Size([450, 128])
+        # x = torch.max(x, dim=1)[0]
+
+        # C: Pool it somehow
+        # x, edge_index, edge_attr, batch, perm, score = self.pooling1(x=x, edge_index=edge_index, batch=batch)
+        # print(x.shape)
+        # x = self.activation(self.batch3(self.conv4(x, edge_index)))
+        # x = torch.stack(torch.split(x, self.pooling1.ratio, 0))
+        # x = torch.flatten(x, 1, 2)
+
+        # x = F.dropout(x, p=0.1, training=self.training)
+        x = self.activation(self.fc1(x))
+        x = self.activation(self.fc2(x))
+        x = self.fc3(x)
+        return x
 
 
 # Test 5 - convnet with triplet loss
@@ -661,21 +761,26 @@ def train5(epoch, model, device, dataloader, optimizer, margin, criterion):
         optimizer.step()
         with torch.no_grad():
             losses.append(loss.item())
-            dist_a_p.append(torch.dist(descritors[0][0].to("cpu"), descritors[0][1].to("cpu"), p=2).item())
-            dist_a_n.append(torch.dist(descritors[1][0].to("cpu"), descritors[0][0].to("cpu"), p=2).item())
+            dist_a_p.append(0)
+            dist_a_n.append(0)
+            # dist_a_p.append(torch.dist(descritors[0][0].to("cpu"), descritors[0][1].to("cpu"), p=2).item())
+            # dist_a_n.append(torch.dist(descritors[1][0].to("cpu"), descritors[0][0].to("cpu"), p=2).item())
             
             lengths.append(torch.norm(descritors[0][0], 2))
-            max_losses.append(max_loss.item())
-            max_dist_a_ps.append(max_dist_a_p.item())
-            min_dist_a_ns.append(min_dist_a_n.item())
-    # return losses, dist_a_p, dist_a_n
+            try: 
+                max_losses.append(max_loss.item())
+                max_dist_a_ps.append(max_dist_a_p.item())
+                min_dist_a_ns.append(min_dist_a_n.item())
+            except:
+                pass
+    if len(max_losses) == 0:
+        return losses, dist_a_p, dist_a_n
     return losses, dist_a_p, dist_a_n, lengths, max_losses, max_dist_a_ps, min_dist_a_ns
 
 import datasetBU3DFE
 import math
 def test_5_convnet_triplet():
-    import reduction_transform
-    POST_TRANSFORM = T.Compose([T.FaceToEdge(remove_faces=True),T.NormalizeScale()])
+    POST_TRANSFORM = T.Compose([T.FaceToEdge(remove_faces=True), T.NormalizeScale()])
     torch.manual_seed(1); torch.cuda.manual_seed(1)    
     start_epoch = 1  # re-written if starting from a loaded save
 
@@ -685,6 +790,7 @@ def test_5_convnet_triplet():
 
     import pickle
 
+    import reduction_transform
     # with torch.no_grad():
     #     pre_redux = reduction_transform.SimplifyQuadraticDecimationBruteForce(2048)
     #     from tqdm import tqdm
@@ -696,25 +802,52 @@ def test_5_convnet_triplet():
     print("Saved/loaded data")
 
     # Load dataset and split into train/test 
-    dataset = datasetBU3DFE.BU3DFEDataset(dataset_cached, POST_TRANSFORM, name_filter=lambda l: True)
-    train_set, test_set = torch.utils.data.random_split(dataset, [80, 20])
+    dataset_bu3dfe = datasetBU3DFE.BU3DFEDataset(dataset_cached, POST_TRANSFORM, name_filter=lambda l: True)
+    train_set, test_set = torch.utils.data.random_split(dataset_bu3dfe, [80, 20])
 
     # Regular dataloader followed by two test dataloader (seen data, and unseen data)
-    dataloader = DataLoader(dataset=train_set, batch_size=8, shuffle=True, num_workers=0, drop_last=True)
-    
-    dataloader_val = DataLoader(dataset=train_set, batch_size=2, shuffle=False, num_workers=0, drop_last=False)
-    dataloader_test = DataLoader(dataset=test_set, batch_size=2, shuffle=False, num_workers=0, drop_last=False)
+    dataloader_bu3dfe = DataLoader(dataset=train_set, batch_size=8, shuffle=True, num_workers=0, drop_last=True)
+    dataloader_bu3dfe_train = DataLoader(dataset=train_set, batch_size=2, shuffle=False, num_workers=0, drop_last=False)
+    dataloader_bu3dfe_test = DataLoader(dataset=test_set, batch_size=2, shuffle=False, num_workers=0, drop_last=False)
+    dataloader_bu3dfe_all = DataLoader(dataset=dataset_bu3dfe, batch_size=2, shuffle=False, num_workers=0, drop_last=False)
+    #dataloader = dataloader_bu3dfe
+
+    import datasetBosphorus
+    from datasetGeneric import GenericDataset
+    bosphorus_path = "/lhome/haakowar/Downloads/Bosphorus/BosphorusDB"
+    # bosphorus_dict = datasetBosphorus.get_bosphorus_dict("/tmp/invalid", pickled=True)
+    bosphorus_dict = datasetBosphorus.get_bosphorus_dict(bosphorus_path, pickled=True, force=False, picke_name="/tmp/Bosphorus_cache-full-2pass.p")
+    dataset_bosphorus = GenericDataset(bosphorus_dict, POST_TRANSFORM)
+    bosphorus_train_set, bosphorus_test_set = torch.utils.data.random_split(dataset_bosphorus, [80, 25])
+    dataloader_bosphorus_test = DataLoader(dataset=bosphorus_test_set, batch_size=2, shuffle=False, num_workers=0, drop_last=False)
+    dataloader_bosphorus_train = DataLoader(dataset=bosphorus_train_set, batch_size=2, shuffle=False, num_workers=0, drop_last=False)
+    dataloader_bosphorus_all = DataLoader(dataset=dataset_bosphorus, batch_size=2, shuffle=False, num_workers=0, drop_last=False)
+    # dataloader = DataLoader(dataset=bosphorus_train_set, batch_size=4, shuffle=True, num_workers=0, drop_last=True)
+
+    from datasetFRGC import get_frgc_dict
+    frgc_path = "/lhome/haakowar/Downloads/FRGCv2/Data/"
+    dataset_frgc_fall_2003 = get_frgc_dict(frgc_path + "Fall2003range", pickled=True,force=False, picke_name="FRGCv2-fall2003_cache.p")
+    dataset_frgc_spring_2003 = get_frgc_dict(frgc_path + "Spring2003range", pickled=True, force=False, picke_name="FRGCv2-spring2003_cache.p")
+    dataset_frgc_spring_2004 = get_frgc_dict(frgc_path + "Spring2004range", pickled=True, force=False, picke_name="FRGCv2-spring2004_cache.p")
+    dataset_frgc_fall_2003 = GenericDataset(dataset_frgc_fall_2003, POST_TRANSFORM)
+    dataset_frgc_spring_2003 = GenericDataset(dataset_frgc_spring_2003, POST_TRANSFORM)
+    dataset_frgc_spring_2004 = GenericDataset(dataset_frgc_spring_2004, POST_TRANSFORM)
+    dataloader_frgc_test = DataLoader(dataset=dataset_frgc_fall_2003, batch_size=2, shuffle=False, num_workers=0, drop_last=False)
+    dataset_frgc = torch.utils.data.ConcatDataset([dataset_frgc_spring_2003, dataset_frgc_spring_2004])
+    dataloader_frgc_train = DataLoader(dataset=dataset_frgc, batch_size=2, shuffle=False, num_workers=0, drop_last=False)
+    dataloader = DataLoader(dataset=dataset_frgc, batch_size=5, shuffle=True, num_workers=0, drop_last=True)
 
     # Load the model
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    model = TestNet55_desc().to(device)
+    # model = TestNet55_desc().to(device)
+    model = TestNet55_descv2().to(device)
 
     # print("Loading save")
     # model.load_state_dict(torch.load("./Testnet55_desc-triplet-128desc-500.pt"))
     # start_epoch += 500
 
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
-    # optimizer = torch.optim.SGD(model.parameters(), lr=1e-25)
+    # optimizer = torch.optim.SGD(model.parameters(), lr=1e-10)
     # loss = ||ap|| - ||an|| + margin.  neg loss => ||an|| >>> ||ap||, at least margin over
 
     margin = 0.2
@@ -724,7 +857,7 @@ def test_5_convnet_triplet():
 
     LOG = ask_for_writer(dataloader, optimizer)
     print(f"dataloader_batch: {dataloader.batch_size}, optimizer: {optimizer.state_dict()['param_groups'][0]['lr']}")
-    for epoch in range(start_epoch, 500):
+    for epoch in range(start_epoch, 405):
         losses, dist_a_p, dist_a_n, lengths, max_losses, max_dist_a_ps, min_dist_a_ns = train5(epoch, model, device, dataloader, optimizer, margin, criterion)
         # losses, dist_a_p, dist_a_n = train5(epoch, model, device, dataloader, optimizer, margin, criterion)
         avg_loss = sum(losses)/len(losses)
@@ -732,8 +865,8 @@ def test_5_convnet_triplet():
         dist_a_n = sum(dist_a_n)/len(dist_a_n)
         # lengths = sum(lengths)/len(lengths)
         #dist_a_n = avg_loss - 0.2 - dist_a_p    # loss = margin + a_p + a_n => a_n = loss - margin - ap
-        print(f"Epoch:{epoch}, avg_loss: {avg_loss:.4f}, dist_a_p: {dist_a_p:.4f}, dist_a_n: {dist_a_n:.4f}, avg_desc_length: {(sum(lengths)/len(lengths)):.2f}, max_loss: {max(max_losses):.4f}, max_dist_a_p: {max(max_dist_a_ps):.4f}, min_dist_a_n: {min(min_dist_a_ns):.4f}")
         # print(f"Epoch:{epoch}, avg_loss: {avg_loss:.4f}, dist_a_p: {dist_a_p:.4f}, dist_a_n: {dist_a_n:.4f}")
+        print(f"Epoch:{epoch}, avg_loss: {avg_loss:.4f}, dist_a_p: {dist_a_p:.4f}, dist_a_n: {dist_a_n:.4f}, avg_desc_length: {(sum(lengths)/len(lengths)):.2f}, max_loss: {max(max_losses):.4f}, max_dist_a_p: {max(max_dist_a_ps):.4f}, min_dist_a_n: {min(min_dist_a_ns):.4f}")
         z = 0.00001
 
         LOG.add_scalar("Loss/train-avg", avg_loss, epoch)
@@ -743,7 +876,7 @@ def test_5_convnet_triplet():
             LOG.add_scalar("Loss/train-max", max(max_losses), epoch)
             LOG.add_scalar("Distance/max-anchor-positive", max(max_dist_a_ps), epoch)
             LOG.add_scalar("Distance/min-anchor-negative", min(min_dist_a_ns), epoch)
-            LOG.add_scalar("Distance/length", min(min_dist_a_ns), epoch)
+            LOG.add_scalar("Distance/length", sum(lengths)/len(lengths), epoch)
         except:
             pass
 
@@ -755,18 +888,60 @@ def test_5_convnet_triplet():
         if epoch % 5 == 0:
             with torch.no_grad():
                 model.eval()
-                # descriptor_dict = metrics.data_dict_to_descriptor_dict(model=model, device=device, data_dict=cfg.DATASET_HELPER.get_cached_dataset(), desc="Evaluation/Test", leave_tqdm=False)
-                descriptor_dict = metrics.generate_descriptor_dict_from_dataloader(model=model, dataloader=dataloader_test, device=device)
-                metric = metrics.get_metric_gallery_set_vs_probe_set_BU3DFE(descriptor_dict)
-                print("RANK-1-valdata", metric.__str_short__())
-                for m in ["tp", "fp", "accuracy"]:
-                    LOG.add_scalar("metric-" + m + "/val", getattr(metric, m), epoch)
+                # descriptor_dict = metrics.generate_descriptor_dict_from_dataloader(model=model, dataloader=dataloader_bu3dfe_test, device=device)
+                # metric = metrics.get_metric_gallery_set_vs_probe_set_BU3DFE(descriptor_dict)
+                # print("RANK-1-testdata (BU-3DFE)", metric.__str_short__())
+                # for m in ["tp", "fp", "accuracy"]:
+                #     LOG.add_scalar("metric-" + m + "/val", getattr(metric, m), epoch)
                 
-                descriptor_dict = metrics.generate_descriptor_dict_from_dataloader(model=model, dataloader=dataloader_val, device=device)
+                # descriptor_dict = metrics.generate_descriptor_dict_from_dataloader(model=model, dataloader=dataloader_bu3dfe_train, device=device)
+                # metric = metrics.get_metric_gallery_set_vs_probe_set_BU3DFE(descriptor_dict)
+                # print("RANK-1-traindata (BU-3DFE)", metric.__str_short__())
+                # for m in ["tp", "fp", "accuracy"]:
+                #     LOG.add_scalar("metric-" + m + "/train", getattr(metric, m), epoch)
+                
+                descriptor_dict = metrics.generate_descriptor_dict_from_dataloader(model=model, dataloader=dataloader_bu3dfe_all, device=device)
                 metric = metrics.get_metric_gallery_set_vs_probe_set_BU3DFE(descriptor_dict)
-                print("RANK-1-traindata", metric.__str_short__())
+                print("RANK-1-all (BU-3DFE)", metric.__str_short__())
                 for m in ["tp", "fp", "accuracy"]:
-                    LOG.add_scalar("metric-" + m + "/train", getattr(metric, m), epoch)
+                    LOG.add_scalar("metric-bu3dfe-" + m + "/test", getattr(metric, m), epoch)
+
+        if epoch % 5 == 0:
+            with torch.no_grad():
+                model.eval()
+                # bosphorus_descriptor_dict = metrics.generate_descriptor_dict_from_dataloader(model=model, dataloader=dataloader_bosphorus_test, device=device)
+                # metric = metrics.get_metric_gallery_set_vs_probe_set_bosphorus(bosphorus_descriptor_dict)
+                # print("RANK-1-testdata (bosphorus)", metric.__str_short__())
+                # for m in ["tp", "fp", "accuracy"]:
+                #     LOG.add_scalar("metric-bosphorus-" + m + "/test", getattr(metric, m), epoch)
+
+                # bosphorus_descriptor_dict = metrics.generate_descriptor_dict_from_dataloader(model=model, dataloader=dataloader_bosphorus_train, device=device)
+                # metric = metrics.get_metric_gallery_set_vs_probe_set_bosphorus(bosphorus_descriptor_dict)
+                # print("RANK-1-traindata (bosphorus)", metric.__str_short__())
+                # for m in ["tp", "fp", "accuracy"]:
+                #     LOG.add_scalar("metric-bosphorus-" + m + "/train", getattr(metric, m), epoch)
+
+                bosphorus_descriptor_dict = metrics.generate_descriptor_dict_from_dataloader(model=model, dataloader=dataloader_bosphorus_all, device=device)
+                metric = metrics.get_metric_gallery_set_vs_probe_set_bosphorus(bosphorus_descriptor_dict)
+                print("RANK-1-all (bosphorus)", metric.__str_short__())
+                for m in ["tp", "fp", "accuracy"]:
+                    LOG.add_scalar("metric-bosphorus-" + m + "/test", getattr(metric, m), epoch)
+
+        if epoch % 5 == 0:
+            with torch.no_grad():
+                model.eval()
+                frgc_descriptor_dict = metrics.generate_descriptor_dict_from_dataloader(model=model, dataloader=dataloader_frgc_test, device=device)
+                metric = metrics.get_metric_gallery_set_vs_probe_set_frgc(frgc_descriptor_dict)
+                print("RANK-1-test (FRGC)", metric.__str_short__())
+                for m in ["tp", "fp", "accuracy"]:
+                    LOG.add_scalar("metric-frgc-" + m + "/test", getattr(metric, m), epoch)
+                    
+                frgc_descriptor_dict = metrics.generate_descriptor_dict_from_dataloader(model=model, dataloader=dataloader_frgc_train, device=device)
+                metric = metrics.get_metric_gallery_set_vs_probe_set_frgc(frgc_descriptor_dict)
+                print("RANK-1-train (FRGC)", metric.__str_short__())
+                for m in ["tp", "fp", "accuracy"]:
+                    LOG.add_scalar("metric-frgc-" + m + "/train", getattr(metric, m), epoch)
+
 
         # if epoch % 100 == 0:
         #     name = f"./Testnet55_desc-triplet-128desc-8020-{epoch}.pt"
@@ -787,7 +962,7 @@ class NetPointnetDuo(torch.nn.Module):
         self.lin1 = Lin(1024, 512)
         self.lin2 = Lin(512, 256)
         self.lin3 = Lin(256, 128)  # Embeddings
-        self.lin4 = Lin(128, 100)  # Softmax, 100 possible different classes, but not all are used, is that bad?
+        self.lin4 = Lin(128, 105)  # Softmax, 100 possible different classes, but not all are used, is that bad?
 
         self.embeddings = False
 
@@ -817,6 +992,72 @@ class NetPointnetDuo(torch.nn.Module):
         else:
             x = F.relu(x)
             x = self.lin4(x)
+            return F.log_softmax(x, dim=-1)
+
+
+class TestNet55_desc_softmax(torch.nn.Module):
+    def __init__(self):
+        super(TestNet55_desc_softmax, self).__init__()
+        torch.manual_seed(1)
+        torch.cuda.manual_seed(1)
+
+        self.embeddings = False
+
+        self.activation = ReLU()
+
+        # org: 3,64,128,128,256,512,pool,512,256,256,128
+        self.conv1 = GCNConv(in_channels=3, out_channels=64)
+        self.batch1 = BatchNorm(in_channels=self.conv1.out_channels)
+
+        self.conv2 = GCNConv(in_channels=64, out_channels=128)
+        self.batch2 = BatchNorm(in_channels=self.conv2.out_channels)
+
+        self.conv3 = GCNConv(in_channels=128, out_channels=256)
+        self.batch3 = BatchNorm(in_channels=self.conv3.out_channels)
+
+        self.fc0 = Linear(256, 256)
+
+        self.fc1 = Linear(256, 128)
+        self.fc2 = Linear(128, 128)
+        self.fc3 = Linear(128, 105)
+
+    def forward(self, data):
+        if isinstance(data, Batch):  # Batch before data, as a batch is a data
+            pos, edge_index, batch = data.pos, data.edge_index, data.batch
+        elif isinstance(data, Data):
+            batch = torch.zeros(data.pos.size(
+                0), dtype=torch.long, device=data.pos.device)
+            pos, edge_index, batch = data.pos, data.edge_index, batch
+        else:
+            raise RuntimeError(f"Illegal data of type: {type(data)}")
+        x = pos
+
+        x = self.conv1(x, edge_index)
+        x = self.batch1(x)
+        x = self.activation(x)
+
+        x = self.conv2(x, edge_index)
+        x = self.batch2(x)
+        x = self.activation(x)
+
+        x = self.conv3(x, edge_index)
+        x = self.batch3(x)
+        x = self.activation(x)
+
+        x = self.fc0(x)
+        x = self.activation(x)
+
+        x = scatter(x, batch, dim=0)
+
+        x = self.activation(self.fc1(x))
+        # x = F.dropout(x, p=0.1, training=self.training)
+        x = self.fc2(x)
+
+        if self.embeddings:
+            return x
+        else:
+            x = self.activation(x)
+            x = self.fc3(x)
             return F.log_softmax(x, dim=-1)
 
 
@@ -912,6 +1153,484 @@ def test_6_softmax_embeddings():
             print(f"Saving {name}")
             torch.save(model.state_dict(), name)
 
+import read_bnt
+def test_7_softmax_embeddings2():
+    # def sampling(s): return read_bnt.data_simple_sample(s, 2048*2)
+    # POST_TRANSFORM_sample = T.Compose([sampling, T.FaceToEdge(remove_faces=True), T.NormalizeScale()])
+    POST_TRANSFORM = T.Compose([T.FaceToEdge(remove_faces=True), T.NormalizeScale()])
+    # POST_TRANSFORM = T.Compose([T.NormalizeScale(), T.SamplePoints(num=1024)])
+    torch.manual_seed(1)
+    torch.cuda.manual_seed(1)
+    start_epoch = 1  # re-written if starting from a loaded save
+
+    # DATASET_PATH_BU3DFE = "/lhome/haakowar/Downloads/BU_3DFE/"
+    # BU3DFE_HELPER = datasetBU3DFE.BU3DFEDatasetHelper(root=DATASET_PATH_BU3DFE, pickled=True, face_to_edge=False)
+    # dataset_cached = BU3DFE_HELPER.get_cached_dataset()
+
+    import pickle
+    import reduction_transform
+    # with torch.no_grad():
+    #     pre_redux = reduction_transform.SimplifyQuadraticDecimationBruteForce(2048)
+    #     from tqdm import tqdm
+    #     for identity, faces in tqdm(dataset_cached.items()):
+    #         for name, data in faces.items():
+    #             dataset_cached[identity][name] = pre_redux(data)
+    #     pickle.dump(dataset_cached, open("BU-3DFE_cache-reduced.p", "wb"), protocol=pickle.HIGHEST_PROTOCOL)
+    dataset_cached = pickle.load(open("BU-3DFE_cache-reduced.p", "rb"))
+    print("Saved/loaded data")
+
+    # Load dataset and split into train/test
+    dataset = datasetBU3DFE.BU3DFEDataset(dataset_cached, POST_TRANSFORM, name_filter=lambda l: True)
+    train_set, test_set = torch.utils.data.random_split(dataset, [80, 20])
+
+    # Regular dataloader followed by two test dataloader (seen data, and unseen data)
+    dataloader_bu3dfe = DataLoader(dataset=train_set, batch_size=8, shuffle=True, num_workers=0, drop_last=True)
+    dataloader_bu3dfe_train = DataLoader(dataset=train_set, batch_size=2, shuffle=False, num_workers=0, drop_last=False)
+    dataloader_bu3dfe_test = DataLoader(dataset=test_set, batch_size=2, shuffle=False, num_workers=0, drop_last=False)
+    dataloader_bu3dfe_all = DataLoader(dataset=dataset, batch_size=2, shuffle=False, num_workers=0, drop_last=False)
+    #dataloader = dataloader_bu3dfe
+
+    import datasetBosphorus
+    from datasetGeneric import GenericDataset
+    bosphorus_path = "/lhome/haakowar/Downloads/Bosphorus/BosphorusDB"
+    # bosphorus_dict = datasetBosphorus.get_bosphorus_dict("/tmp/invalid", pickled=True)
+    bosphorus_dict = datasetBosphorus.get_bosphorus_dict(bosphorus_path, pickled=False, force=False, picke_name="/tmp/Bosphorus_cache-full-2pass-1000.p")
+    dataset_bosphorus = GenericDataset(bosphorus_dict, POST_TRANSFORM)
+    bosphorus_train_set, bosphorus_test_set = torch.utils.data.random_split(dataset_bosphorus, [80, 25])
+    dataloader_bosphorus_test = DataLoader(dataset=bosphorus_test_set, batch_size=2, shuffle=False, num_workers=0, drop_last=False)
+    dataloader_bosphorus_train = DataLoader(dataset=bosphorus_train_set, batch_size=2, shuffle=False, num_workers=0, drop_last=False)
+    dataloader = DataLoader(dataset=bosphorus_train_set,batch_size=20, shuffle=True, num_workers=4, drop_last=True)
+
+    # Load the model
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    # model = model = NetPointnetDuo().to(device)
+    model = model = TestNet55_desc_softmax().to(device)
+
+    # print("Loading save")
+    # model.load_state_dict(torch.load("./Testnet55_desc-triplet-128desc-500.pt"))
+    # start_epoch += 500
+
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
+
+    LOG = ask_for_writer(dataloader, optimizer)
+    print(f"dataloader_batch: {dataloader.batch_size}, optimizer: {optimizer.state_dict()['param_groups'][0]['lr']}")
+    for epoch in range(start_epoch, 405):
+        losses = train6(epoch, model, device, dataloader, optimizer)
+        avg_loss = sum(losses)/len(losses)
+        print(f"Epoch:{epoch}, avg_loss: {avg_loss:.4f}")
+
+
+        if epoch % 5 == 0:
+            with torch.no_grad():
+                model.eval()
+                model.embeddings = False
+
+                length = 0
+                correct = 0
+                for major_batch in dataloader_bosphorus_train:
+                    for minor_batch in major_batch: 
+                        output = model(minor_batch.to(device))
+                        length += minor_batch.id.shape[0]
+                        correct += output.max(1)[1].eq(minor_batch.id).sum().item()
+                print(f"Evaluation Accuracy (train): {(correct / length):6f} ({correct}/{length})")
+
+                model.embeddings = True
+
+                descriptor_dict = metrics.generate_descriptor_dict_from_dataloader(model=model, dataloader=dataloader_bu3dfe_all, device=device)
+                metric = metrics.get_metric_gallery_set_vs_probe_set_BU3DFE(descriptor_dict)
+                print("RANK-1-all (BU-3DFE)", metric.__str_short__())
+
+                bosphorus_descriptor_dict = metrics.generate_descriptor_dict_from_dataloader(model=model, dataloader=dataloader_bosphorus_test, device=device)
+                metric = metrics.get_metric_gallery_set_vs_probe_set_bosphorus(bosphorus_descriptor_dict)
+                print("RANK-1-testdata (bosphorus)", metric.__str_short__())
+
+                bosphorus_descriptor_dict = metrics.generate_descriptor_dict_from_dataloader(model=model, dataloader=dataloader_bosphorus_train, device=device)
+                metric = metrics.get_metric_gallery_set_vs_probe_set_bosphorus(bosphorus_descriptor_dict)
+                print("RANK-1-traindata (bosphorus)", metric.__str_short__())
+
+        # if epoch % 100 == 0:
+        #     name = f"./Testnet55_desc-triplet-128desc-8020-{epoch}.pt"
+        #     print(f"Saving {name}")
+        #     torch.save(model.state_dict(), name)
+
+
+# Linear based siamese wiith binary classification
+class Siamese_part(torch.nn.Module):
+    def __init__(self):
+        super(Siamese_part, self).__init__()
+        torch.manual_seed(1)
+        torch.cuda.manual_seed(1)
+
+        # self.fc0 = Linear(128, 128)
+        self.fc1 = Linear(256, 64)
+        # self.fc2 = Linear(128, 64)
+        self.fc3 = Linear(64, 1)
+
+    def forward(self, x1, x2):
+        x = torch.cat((x1, x2), dim=-1)  # Combine both descritors
+
+        x = F.relu(self.fc1(x))
+        # x = F.relu(self.fc2(x))
+        x = torch.sigmoid(self.fc3(x))  # sigmoid to return <0, 1>
+        assert x.shape[-1] == 1
+        x = torch.squeeze(x)  # Make it [N] instead of [N, 1]
+        return x
+
+
+# Test 8 - convnet with siamese
+def train8_sia(model, siam, device, dataloader, optimizer, criterion):
+    model.train()
+
+    losses = []
+    correct = []
+    correct_pos_pair = []
+    correct_neg_pair = []
+    for batch in dataloader:
+        # create single batch object
+        datas = []
+        for b in batch:
+            datas += b.to_data_list()
+        batch_all = geometric_batch.Batch.from_data_list(datas)
+
+        batch_all = batch_all.to(device)
+        optimizer.zero_grad()
+        descritors = model(batch_all)
+
+        # Create dict again
+        dic_descriptors = {}
+        for i in range(len(batch_all.id)):
+            id = batch_all.id[i].item()
+            if id in dic_descriptors:
+                dic_descriptors[id].append(descritors[i])
+            else:
+                dic_descriptors[id] = [descritors[i]]
+        descritors = list(dic_descriptors.values())
+
+        all = []
+        labels = []  # indencies for all, eks [0,0,0,1,1,2,2,3,3]
+        for ident, listt in enumerate(descritors):
+            all += listt
+            labels += [ident] * len(listt)
+
+        all = torch.stack(all).to(device)
+        labels = torch.tensor(labels).to(device)
+
+        # Create a NxN matrix of all vs all
+
+        # print("all", all.shape)
+        # print("labels", labels.shape)
+        labels_combi = torch.combinations(labels, r=2, with_replacement=True)
+        labels_combi = labels_combi[:, 0].eq(labels_combi[:, 1]).float()
+        
+        indecies = torch.arange(all.shape[0]).to(device); # print(indecies)
+        indecies = torch.combinations(indecies, r=2, with_replacement=True)
+        assert indecies.shape[0] == labels_combi.shape[0]
+        
+        # balance
+        # Find indecies for all positive.
+        indecies_pos = indecies[labels_combi.eq(1)]
+        label_pos = labels_combi[labels_combi.eq(1)]
+
+        # Find indecies for alle negative pairs
+        mask_neg = torch.randperm(indecies[labels_combi.eq(0)].shape[0])[:indecies_pos.shape[0]]
+        indecies_neg = indecies[labels_combi.eq(0)][mask_neg]
+        label_neg = labels_combi[labels_combi.eq(0)][mask_neg]
+        # print("labels", labels_combi.shape)
+        # print("sum labels", labels_combi.eq(1).sum().item())
+        # print("indi", indecies.shape)
+        # print("pos", indecies_pos.shape)
+        # print("pos-test", indecies_pos[:, 0].eq(indecies_pos[:, 1]).sum())
+        # print("neg", indecies_neg.shape)
+        
+        # Cobmine for all indecies to give to the model
+        indecies = torch.cat((indecies_pos, indecies_neg), dim=0)
+        labels_combi = torch.cat((label_pos, label_neg), dim=0)
+        # print(labels_combi[:2600].sum())
+        # print(labels_combi.sum())
+        # print("cat", indecies.shape)
+        middle = labels_combi.shape[0]//2
+        assert labels_combi[:middle].sum().eq(middle).item()  # The first half should all be "1"
+        assert labels_combi[middle:].sum().eq(0).item()  # The seconds half should all be "0"
+
+        descriptors_combi_1 = all[indecies[:, 0]]
+        descriptors_combi_2 = all[indecies[:, 1]]
+        # print("desc1", descriptors_combi_1.shape)
+        # print("desc2", descriptors_combi_2.shape)
+        
+        result = siam(descriptors_combi_1, descriptors_combi_2)
+        loss = criterion(result, labels_combi)
+
+        loss.backward()
+        optimizer.step()
+
+        with torch.no_grad():
+            losses.append(loss.item())
+            correct.append(round((result>0.5).eq(labels_combi).sum().item()/labels_combi.shape[0], 4))
+            results_pos_pair = result[labels_combi.eq(1)]
+            results_neg_pair = result[labels_combi.eq(0)]
+            correct_pos_pair.append((results_pos_pair>0.5).sum().item())
+            correct_neg_pair.append((results_neg_pair<=0.5).sum().item())
+    return losses, correct, correct_pos_pair, correct_neg_pair
+
+def test_8_convnet_triplet():
+    POST_TRANSFORM = T.Compose([T.FaceToEdge(remove_faces=True), T.NormalizeScale()])
+    # POST_TRANSFORM = T.NormalizeScale(), T.SamplePoints(1024)
+    torch.manual_seed(1)
+    torch.cuda.manual_seed(1)
+    start_epoch = 1  # re-written if starting from a loaded save
+
+
+    import datasetBU3DFEv2
+    from datasetGeneric import GenericDataset
+    bu3dfe_path = "/lhome/haakowar/Downloads/BU_3DFE"
+    bu3dfe_dict =  datasetBU3DFEv2.get_bu3dfe_dict(bu3dfe_path, pickled=True, force=False)
+    dataset_bu3dfe = GenericDataset(bu3dfe_dict, POST_TRANSFORM)
+    train_set, test_set = torch.utils.data.random_split(dataset_bu3dfe, [80, 20])
+    # Regular dataloader followed by two test dataloader (seen data, and unseen data)
+    dataloader_bu3dfe = DataLoader(dataset=train_set, batch_size=8, shuffle=True, num_workers=0, drop_last=True)
+    dataloader_bu3dfe_train = DataLoader(dataset=train_set, batch_size=2, shuffle=False, num_workers=0, drop_last=False)
+    dataloader_bu3dfe_test = DataLoader(dataset=test_set, batch_size=2, shuffle=False, num_workers=0, drop_last=False)
+    dataloader_bu3dfe_all = DataLoader(dataset=dataset_bu3dfe, batch_size=2, shuffle=False, num_workers=0, drop_last=False)
+    # dataloader = dataloader_bu3dfe
+
+    import datasetBosphorus
+    bosphorus_path = "/lhome/haakowar/Downloads/Bosphorus/BosphorusDB"
+    # bosphorus_dict = datasetBosphorus.get_bosphorus_dict("/tmp/invalid", pickled=True)
+    bosphorus_dict = datasetBosphorus.get_bosphorus_dict(bosphorus_path, pickled=True, force=False, picke_name="/tmp/Bosphorus_cache-full-2pass.p")
+    dataset_bosphorus = GenericDataset(bosphorus_dict, POST_TRANSFORM)
+    bosphorus_train_set, bosphorus_test_set = torch.utils.data.random_split(dataset_bosphorus, [80, 25])
+    dataloader_bosphorus_test = DataLoader(dataset=bosphorus_test_set, batch_size=2, shuffle=False, num_workers=0, drop_last=False)
+    dataloader_bosphorus_train = DataLoader(dataset=bosphorus_train_set, batch_size=2, shuffle=False, num_workers=0, drop_last=False)
+    dataloader_bosphorus_all = DataLoader(dataset=dataset_bosphorus, batch_size=2, shuffle=False, num_workers=0, drop_last=False)
+    # dataloader = DataLoader(dataset=bosphorus_train_set, batch_size=4, shuffle=True, num_workers=0, drop_last=True)
+
+    from datasetFRGC import get_frgc_dict
+    frgc_path = "/lhome/haakowar/Downloads/FRGCv2/Data/"
+    dataset_frgc_fall_2003 = get_frgc_dict(frgc_path + "Fall2003range", pickled=True, force=False, picke_name="FRGCv2-fall2003_cache.p")
+    dataset_frgc_spring_2003 = get_frgc_dict(frgc_path + "Spring2003range", pickled=True, force=False, picke_name="FRGCv2-spring2003_cache.p")
+    dataset_frgc_spring_2004 = get_frgc_dict(frgc_path + "Spring2004range", pickled=True, force=False, picke_name="FRGCv2-spring2004_cache.p")
+    dataset_frgc_fall_2003 = GenericDataset(dataset_frgc_fall_2003, POST_TRANSFORM)
+    dataset_frgc_spring_2003 = GenericDataset(dataset_frgc_spring_2003, POST_TRANSFORM)
+    dataset_frgc_spring_2004 = GenericDataset(dataset_frgc_spring_2004, POST_TRANSFORM)
+    dataloader_frgc_test = DataLoader(dataset=dataset_frgc_fall_2003, batch_size=2, shuffle=False, num_workers=0, drop_last=False)
+    dataset_frgc_train = torch.utils.data.ConcatDataset([dataset_frgc_spring_2003, dataset_frgc_spring_2004])
+    dataloader_frgc_train = DataLoader(dataset=dataset_frgc_train, batch_size=2, shuffle=False, num_workers=0, drop_last=False)
+    dataset_frgc_all = torch.utils.data.ConcatDataset([dataset_frgc_fall_2003, dataset_frgc_spring_2003, dataset_frgc_spring_2004])
+    dataloader_frgc_all = DataLoader(dataset=dataset_frgc_all, batch_size=2, shuffle=False, num_workers=0, drop_last=False)
+    dataloader = DataLoader(dataset=dataset_frgc_train, batch_size=5, shuffle=True, num_workers=0, drop_last=True)
+
+    # Load the model
+    assert torch.cuda.is_available()
+    device = torch.device('cuda')
+    model = TestNet55_descv2().to(device)
+    # model = Net.to(device)
+    siam = Siamese_part().to(device)
+    
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
+    criterion = torch.nn.BCELoss()
+
+    LOG = ask_for_writer(dataloader, optimizer)
+    print(f"dataloader_batch: {dataloader.batch_size}, optimizer: {optimizer.state_dict()['param_groups'][0]['lr']}")
+    for epoch in range(start_epoch, 605):
+        model.train()
+        siam.train()
+        losses, correct, correct_pos_pair, correct_neg_pair = train8_sia(model, siam, device, dataloader, optimizer, criterion)
+        avg_loss = sum(losses)/len(losses)
+        # print(f"Epoch:{epoch}, avg_loss: {avg_loss:.4f}, correct: {sum(correct)/len(correct):.4f},\tpospair ({sum(correct_pos_pair)}) {correct_pos_pair},\tnegpair ({sum(correct_neg_pair)}) {correct_neg_pair}")
+        print(f"Epoch:{epoch}, avg_loss: {avg_loss:.4f}, correct: {sum(correct)/len(correct):.4f},\tpospair ({sum(correct_pos_pair)}),\tnegpair ({sum(correct_neg_pair)})")
+
+        LOG.add_scalar("loss/train-avg", avg_loss, epoch)
+
+        with torch.no_grad():
+            toprint = [[],[],[]]  # 3 types of metrics
+            if epoch % 5 == 0:
+                model.eval()
+                siam.eval()
+
+                # # Validation set
+                # bu3dfe_descriptor_dict = metrics.generate_descriptor_dict_from_dataloader(model=model, dataloader=dataloader_bu3dfe_test, device=device)
+                
+                # # Descriptor Rank1
+                # metric = metrics.get_metric_gallery_set_vs_probe_set_BU3DFE(bu3dfe_descriptor_dict)
+                # toprint[0].append(f"Descriptor-RANK-1-val   (BU-3DFE)\t{metric.__str_short__()}")
+                # metric.log_minimal("bu3dfe-descriptor-rank1", "val", epoch, LOG)
+
+                # # Siamese verification
+                # loss, metric = metrics.generate_metric_siamese(siam, device, criterion, bu3dfe_descriptor_dict)
+                # toprint[1].append(f"Siamese-verification-val  (BU-3DFE),\tloss:{loss:.3f}, {metric}")
+                # metric.log_maximal("bu3dfe-siamese-validation", "val", epoch, LOG)
+                # LOG.add_scalar("loss/val-bu3dfe-siamese-validation", loss, epoch)
+
+                # # Siamese Rank1
+                # loss, metric = metrics.get_siamese_rank1_gallery_set_vs_probe_set_BU3DFE(siam, device, criterion, bu3dfe_descriptor_dict)
+                # toprint[2].append(f"Siamese-rank1-val (BU-3DFE),\tloss:{loss:.3f}, {metric.__str_short__()}")
+                # metric.log_minimal("bu3dfe-siamese-rank1", "val", epoch, LOG)
+
+                # # Training set
+                # bu3dfe_descriptor_dict = metrics.generate_descriptor_dict_from_dataloader(model=model, dataloader=dataloader_bu3dfe_train, device=device)
+                
+                # # Descriptor Rank1
+                # metric = metrics.get_metric_gallery_set_vs_probe_set_BU3DFE(bu3dfe_descriptor_dict)
+                # toprint[0].append(f"Descriptor-RANK-1-train (BU-3DFE)\t{metric.__str_short__()}")
+                # metric.log_minimal("bu3dfe-descriptor-rank1", "train", epoch, LOG)
+
+                # # Siamese verification
+                # loss, metric = metrics.generate_metric_siamese(siam, device, criterion, bu3dfe_descriptor_dict)
+                # toprint[1].append(f"Siamese-verification-train (BU-3DFE),\tloss:{loss:.3f}, {metric}")
+                # metric.log_maximal("bu3dfe-siamese-validation", "train", epoch, LOG)
+                # LOG.add_scalar("loss/train-bu3dfe-siamese-validation", loss, epoch)
+
+                # # Siamese rank1
+                # loss, metric = metrics.get_siamese_rank1_gallery_set_vs_probe_set_BU3DFE(siam, device, criterion, bu3dfe_descriptor_dict)
+                # toprint[2].append(f"Siamese-rank1-train (BU-3DFE),\tloss:{loss:.3f}, {metric.__str_short__()}")
+                # metric.log_minimal("bu3dfe-siamese-rank1", "train", epoch, LOG)
+
+                # All
+                bu3dfe_descriptor_dict = metrics.generate_descriptor_dict_from_dataloader(model=model, dataloader=dataloader_bu3dfe_all, device=device)
+                
+                # Descriptor Rank1
+                metric = metrics.get_metric_gallery_set_vs_probe_set_BU3DFE(bu3dfe_descriptor_dict)
+                toprint[0].append(f"Descriptor-RANK-1-all   (BU-3DFE)\t{metric.__str_short__()}")
+                metric.log_minimal("bu3dfe-descriptor-rank1", "all", epoch, LOG)
+
+                # Siamese verification
+                loss, metric = metrics.generate_metric_siamese(siam, device, criterion, bu3dfe_descriptor_dict)
+                toprint[1].append(f"Siamese-verification-all  (BU-3DFE),\tloss:{loss:.3f}, {metric}")
+                metric.log_maximal("bu3dfe-siamese-validation", "all", epoch, LOG)
+                LOG.add_scalar("loss/all-bu3dfe-siamese-validation", loss, epoch)
+
+                # # Siamese Rank1
+                loss, metric = metrics.get_siamese_rank1_gallery_set_vs_probe_set_BU3DFE(siam, device, criterion, bu3dfe_descriptor_dict)
+                toprint[2].append(f"Siamese-rank1-all (BU-3DFE),\tloss:{loss:.3f}, {metric.__str_short__()}")
+                metric.log_minimal("bu3dfe-siamese-rank1", "all", epoch, LOG)
+
+            if epoch % 5 == 0:
+                model.eval()
+                siam.eval()
+
+                # # Validation
+                # bosphorus_descriptor_dict = metrics.generate_descriptor_dict_from_dataloader(model=model, dataloader=dataloader_bosphorus_test, device=device)
+
+                # # Descriptor Rank1
+                # metric = metrics.get_metric_gallery_set_vs_probe_set_bosphorus(bosphorus_descriptor_dict)
+                # toprint[0].append(f"Descriptor-RANK-1-val   (bosphorus)\t{metric.__str_short__()}")
+                # metric.log_minimal("bosphorus-descriptor-rank1", "val", epoch, LOG)
+
+                # # Siamese verification
+                # loss, metric = metrics.generate_metric_siamese(siam, device, criterion, bosphorus_descriptor_dict)
+                # toprint[1].append(f"Siamese-verification-val  (bosphorus),\tloss:{loss:.3f}, {metric}")
+                # metric.log_maximal("bosphorus-siamese-validation", "val", epoch, LOG)
+                # LOG.add_scalar("loss/val-bosphorus-siamese-validation", loss, epoch)
+
+                # # Siamese rank1
+                # loss, metric = metrics.get_siamese_rank1_gallery_set_vs_probe_set_bosphorus(siam, device, criterion, bosphorus_descriptor_dict)
+                # toprint[2].append(f"Siamese-rank1-val (bosphorus),\tloss:{loss:.3f}, {metric.__str_short__()}")
+                # metric.log_minimal("bosphorus-siamese-rank1", "val", epoch, LOG)
+
+                # # Training set
+                # bosphorus_descriptor_dict = metrics.generate_descriptor_dict_from_dataloader(model=model, dataloader=dataloader_bosphorus_train, device=device)
+
+                # # descriptor rank1
+                # metric = metrics.get_metric_gallery_set_vs_probe_set_bosphorus(bosphorus_descriptor_dict)
+                # toprint[0].append(f"Descriptor-RANK-1-train (bosphorus)\t{metric.__str_short__()}")
+                # metric.log_minimal("bosphorus-descriptor-rank1", "train", epoch, LOG)
+
+                # # Siamese verification
+                # loss, metric = metrics.generate_metric_siamese(siam, device, criterion, bosphorus_descriptor_dict)
+                # toprint[1].append(f"Siamese-verification-train (bosphorus),\tloss:{loss:.3f}, {metric}")
+                # metric.log_maximal("bosphorus-siamese-validation", "train", epoch, LOG)
+                # LOG.add_scalar("loss/train-bosphorus-siamese-validation", loss, epoch)
+
+                # # Siamese rank1
+                # loss, metric = metrics.get_siamese_rank1_gallery_set_vs_probe_set_bosphorus(siam, device, criterion, bosphorus_descriptor_dict)
+                # toprint[2].append(f"Siamese-rank1-train (bosphorus),\tloss:{loss:.3f}, {metric.__str_short__()}")
+                # metric.log_minimal("bosphorus-siamese-rank1", "train", epoch, LOG)
+
+                # All
+                bosphorus_descriptor_dict = metrics.generate_descriptor_dict_from_dataloader(model=model, dataloader=dataloader_bosphorus_all, device=device)
+                
+                # Rank1 descriptor
+                metric = metrics.get_metric_gallery_set_vs_probe_set_bosphorus(bosphorus_descriptor_dict)
+                toprint[0].append(f"Descriptor-RANK-1-all (bosphorus)\t{metric.__str_short__()}")
+                metric.log_minimal("bosphorus-descriptor-rank1", "all", epoch, LOG)
+
+                # Siamese verification
+                loss, metric = metrics.generate_metric_siamese(siam, device, criterion, bosphorus_descriptor_dict)
+                toprint[1].append(f"Siamese-verification-all (bosphorus),\tloss:{loss:.3f}, {metric}")
+                metric.log_maximal("bosphorus-siamese-validation", "all", epoch, LOG)
+                LOG.add_scalar("loss/all-bosphorus-siamese-validation", loss, epoch)
+
+                # Siamese rank1
+                loss, metric = metrics.get_siamese_rank1_gallery_set_vs_probe_set_bosphorus(siam, device, criterion, bosphorus_descriptor_dict)
+                toprint[2].append(f"Siamese-rank1-all (bosphorus),\tloss:{loss:.3f}, {metric.__str_short__()}")
+                metric.log_minimal("bosphorus-siamese-rank1", "all", epoch, LOG)
+
+            if epoch % 5 == 0:
+                model.eval()
+                siam.eval()
+                # Validation
+                frgc_descriptor_dict = metrics.generate_descriptor_dict_from_dataloader(model=model, dataloader=dataloader_frgc_train, device=device)
+
+                # Descriptor Rank1
+                metric = metrics.get_metric_gallery_set_vs_probe_set_frgc(frgc_descriptor_dict)
+                toprint[0].append(f"Descriptor-RANK-1-val   (frgc)\t{metric.__str_short__()}")
+                metric.log_minimal("frgc-descriptor-rank1", "val", epoch, LOG)
+
+                # Siamese verification
+                loss, metric = metrics.generate_metric_siamese(siam, device, criterion, frgc_descriptor_dict)
+                toprint[1].append(f"Siamese-verification-val  (frgc),\tloss:{loss:.3f}, {metric}")
+                metric.log_maximal("frgc-siamese-validation", "val", epoch, LOG)
+                LOG.add_scalar("loss/val-frgc-siamese-validation", loss, epoch)
+
+                # Siamese rank1
+                loss, metric = metrics.get_siamese_rank1_gallery_set_vs_probe_set_frgc(siam, device, criterion, frgc_descriptor_dict)
+                toprint[2].append(f"Siamese-rank1-val (frgc),\tloss:{loss:.3f}, {metric.__str_short__()}")
+                metric.log_minimal("frgc-siamese-rank1", "val", epoch, LOG)
+
+                # Training set
+                frgc_descriptor_dict = metrics.generate_descriptor_dict_from_dataloader(model=model, dataloader=dataloader_frgc_test, device=device)
+
+                # descriptor rank1
+                metric = metrics.get_metric_gallery_set_vs_probe_set_frgc(frgc_descriptor_dict)
+                toprint[0].append(f"Descriptor-RANK-1-train (frgc)\t{metric.__str_short__()}")
+                metric.log_minimal("frgc-descriptor-rank1", "train", epoch, LOG)
+
+                # Siamese verification
+                loss, metric = metrics.generate_metric_siamese(siam, device, criterion, frgc_descriptor_dict)
+                toprint[1].append(f"Siamese-verification-train (frgc),\tloss:{loss:.3f}, {metric}")
+                metric.log_maximal("frgc-siamese-validation", "train", epoch, LOG)
+                LOG.add_scalar("loss/train-frgc-siamese-validation", loss, epoch)
+
+                # Siamese rank1
+                loss, metric = metrics.get_siamese_rank1_gallery_set_vs_probe_set_frgc(siam, device, criterion, frgc_descriptor_dict)
+                toprint[2].append(f"Siamese-rank1-train (frgc),\tloss:{loss:.3f}, {metric.__str_short__()}")
+                metric.log_minimal("frgc-siamese-rank1", "train", epoch, LOG)
+
+                # # All
+                # frgc_descriptor_dict = metrics.generate_descriptor_dict_from_dataloader(model=model, dataloader=dataloader_frgc_all, device=device)
+                
+                # # Descriptor rank1
+                # metric = metrics.get_metric_gallery_set_vs_probe_set_frgc(frgc_descriptor_dict)
+                # toprint[0].append(f"Descriptor-RANK-1-all (FRGC)\t{metric.__str_short__()}")
+                # metric.log_minimal("frgc-descriptor-rank1", "all", epoch, LOG)
+
+                # # Siamese verification
+                # loss, metric = metrics.generate_metric_siamese(siam, device, criterion, frgc_descriptor_dict)
+                # toprint[1].append(f"Siamese-verification-all (FRGC),\t\tloss:{loss:.3f}, {metric}")
+                # metric.log_maximal("frgc-siamese-validation", "all", epoch, LOG)
+                # LOG.add_scalar("loss/all-frgc-siamese-validation", loss, epoch)
+
+                # # Siamese rank1
+                # loss, metric = metrics.get_siamese_rank1_gallery_set_vs_probe_set_frgc(siam, device, criterion, frgc_descriptor_dict)
+                # toprint[2].append(f"Siamese-rank1-all (frgc),\tloss:{loss:.3f}, {metric.__str_short__()}")
+                # metric.log_minimal("frgc-siamese-rank1", "all", epoch, LOG)
+
+
+            if sum(len(section) for section in toprint) > 0:
+                for section in toprint:
+                    for line in section:
+                        print(line)
+                torch.cuda.empty_cache()  # Needed to stop memory leak... TODO figure out why metric uses 4gb ish ram, or just allow it
 
 # ask_for_writer(dataloader, optimizer)
 def ask_for_writer(dataloader, optimizer):
@@ -939,7 +1658,7 @@ def ask_for_writer(dataloader, optimizer):
     navn = f"{str(dato)}_lr{lr:1.0e}_batchsize{batch_size}_{extra.replace(' ', '-')}"
     import os
     from torch.utils.tensorboard import SummaryWriter
-    WRITER = SummaryWriter(log_dir=os.path.join("logging", navn), max_queue=20)
+    WRITER = SummaryWriter(log_dir=os.path.join("logging-siamese-bosph", navn))
     print("Logging enabled: " + navn)
     return WRITER
 
@@ -949,5 +1668,7 @@ if __name__ == '__main__':
     # print("test2"); test_2_pointnet_triplet_loss()
     # print("test3"); test_3_poitnet_softmax()
     # print("test4"); test_4_convnet_softmax()
-    print("test5"); test_5_convnet_triplet()
+    # print("test5"); test_5_convnet_triplet()
     # print("test6"); test_6_softmax_embeddings()
+    # print("test7"); test_7_softmax_embeddings2()
+    print("test8"); test_8_convnet_triplet()
