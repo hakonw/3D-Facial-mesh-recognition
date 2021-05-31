@@ -6,8 +6,9 @@ import read_bnt
 
 
 # global_relevant = lambda name: "_N_N_" in name or "_E_" in name
-global_relevant = lambda name: "IGN" not in name
-def generate_bosphorus_dict(root, filtered=True, filter=global_relevant):
+# global_relevant = lambda name: "IGN" not in name
+global_relevant = lambda name: "_N_N_" in name or "_LFAU_" in name or "_UFAU_" in name or "_CAU_" in name or "_E_" in name
+def generate_bosphorus_dict(root, filtered=True, filter=global_relevant, sample="bruteforce", sample_size=2048):
     dataset = {}
 
     # Find all sub-folders
@@ -33,9 +34,11 @@ def generate_bosphorus_dict(root, filtered=True, filter=global_relevant):
                 continue
 
             data_raw = read_bnt.read_bnt_raw(file_path)
-            # data_sampled = read_bnt.data_simple_sample(data_raw, 2048)
-            data_sampled = read_bnt.data_2pass_sample(data_raw, 2048)
-            # data_sampled = read_bnt.data_bruteforce_sample(data_raw)
+            if sample == "2pass": data_sampled = read_bnt.data_2pass_sample(data_raw, sample_size[0], sample_size[1])
+            elif sample == "bruteforce": data_sampled = read_bnt.data_bruteforce_sample(data_raw)
+            elif sample == "random": data_sampled = read_bnt.data_simple_sample(data_raw, sample_size)
+            elif sample == "all": data_sampled = read_bnt.data_all_sample(data_raw)
+            else: raise ValueError("Invalid argument", sample)
             identity_data[basename] = data_sampled
             # identity_data[basename] = data_raw
 
@@ -47,7 +50,7 @@ def generate_bosphorus_dict(root, filtered=True, filter=global_relevant):
 # DOES NOT CHECK IF FILTER IS CHANGED
 # TODO maybe save entire dataset, followed by applying filter post?
 # Or possibly both
-def get_bosphorus_dict(root, pickled, force=False, picke_name="Bosphorus_cache.p", filter=global_relevant):
+def get_bosphorus_dict(root, pickled, force=False, picke_name="Bosphorus_cache.p", filter=global_relevant, sample="2pass", sample_size=2048):
     if pickled and not force:
         try:
             print("Loading pickle")
@@ -57,7 +60,7 @@ def get_bosphorus_dict(root, pickled, force=False, picke_name="Bosphorus_cache.p
         except Exception as e:
             print(f"Pickle failed - {str(e)}, loading data manually")
     
-    dataset = generate_bosphorus_dict(root, filtered=True, filter=filter)
+    dataset = generate_bosphorus_dict(root, filtered=True, filter=filter, sample=sample, sample_size=sample_size)
 
     if pickled:
         print("Saving pickle")
