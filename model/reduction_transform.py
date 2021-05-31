@@ -1,18 +1,18 @@
 
 import torch_geometric.utils
 
-def simplify_trimesh(trimesh, target, undershootmargin=0):
+def simplify_trimesh(trimesh, target, undershootmargin, overshootmargin=0):
     for _ in range(20):
         vertices = trimesh.vertices.shape[0]
         faces = trimesh.faces.shape[0]
 
-        if (target-undershootmargin) <= vertices <= target:
+        if (target-undershootmargin) <= vertices <= (target+overshootmargin):
             return trimesh
         if vertices < target - undershootmargin:
             raise RuntimeError(f"Optimized too much. TODO fix {trimesh}")
 
         must_remove_vertices = vertices - target
-        must_remove_faces = must_remove_vertices  # Possibly add a factor here
+        must_remove_faces = must_remove_vertices # //2 -1  # Possibly add a factor here
         trimesh = trimesh.simplify_quadratic_decimation(faces - must_remove_faces)
     raise RuntimeError(
         f"Was not able to optimize within 20 generations. Stopping: {trimesh}")
@@ -32,3 +32,16 @@ class SimplifyQuadraticDecimationBruteForce(object):
         data.pos = new_data.pos
         data.face = new_data.face
         return data
+
+import torch_geometric.data
+import torch
+from scipy.spatial import Delaunay
+class DelaunayIt(object):
+    def __call__(self, data):
+        spatial = Delaunay(points=data.pos[:, 0:2])
+        faces = torch.tensor(spatial.simplices, dtype=torch.long).t().contiguous()
+        # pos = data.pos # torch.from_numpy(data).to(torch.float).contiguous()
+        # d = torch_geometric.data.Data(pos=pos, face=faces)  # Note Face not Faces
+        data.face = faces
+        return data
+    

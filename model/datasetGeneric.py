@@ -2,9 +2,11 @@ from torch_geometric.data import Dataset
 import random
 import numpy as np
 
+import torch_geometric.data
+
 # Generic dataloader for face-dict of type [ident][face]
 
-class GenericDataset(Dataset):  # This does not need to be of type Dataset
+class GenericDataset(Dataset):
     def __init__(self, dataset_dict: dict, transform, name_filter=lambda l: True):
         self.dataset_dict = dataset_dict
         self.dataset_keys = list(dataset_dict.keys())
@@ -34,8 +36,19 @@ class GenericDataset(Dataset):  # This does not need to be of type Dataset
         # Transform into 1d array for collection  (TODO better way?)
         out = []
         for name, d in safe_dict.items():
+            # d.uniqid =  int("".join([str(ord(c)-38) for c in str(name)])) # Between 10 (for 0) and 84(z). Gives long error
             d.id = idx  # TODO make sure not to mix datasets
             d.name = name
             d.dataset_id = self.dataset_keys[idx]
             out.append(d)
-        return out
+        return torch_geometric.data.Batch.from_data_list(out)
+
+import torch.utils.data.dataloader
+import utils
+class DataLoader(torch.utils.data.DataLoader):
+    def __init__(self, dataset, batch_size=1, shuffle=False, **kwargs):
+
+        if "collate_fn" in kwargs:
+            del kwargs["collate_fn"]
+
+        super(DataLoader, self).__init__(dataset, batch_size, shuffle, collate_fn=utils.list_collate_fn, **kwargs)

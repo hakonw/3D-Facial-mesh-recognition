@@ -48,6 +48,14 @@ def read_bnt_raw(filename):
     return data
 
 
+def data_all_sample(data):
+    spatial = Delaunay(points=data[:, 0:2])
+    faces = torch.tensor(spatial.simplices, dtype=torch.long).t().contiguous()
+    pos = torch.from_numpy(data).to(torch.float).contiguous()
+    d = torch_geometric.data.Data(pos=pos, face=faces)  # Note Face not Faces
+    return d
+
+
 def data_simple_sample(data, n_vertices=2048):
     # Sample n_vertices points
     n_rows = data.shape[0]
