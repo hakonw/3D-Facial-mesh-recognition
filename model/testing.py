@@ -1,12 +1,14 @@
-from os import posix_fadvise
+from os import makedirs, posix_fadvise
 import os.path as osp
+from sklearn.utils.extmath import log_logistic
 
 import torch
 import torch.nn.functional as F
 from torch.nn import Sequential as Seq, Linear, Linear as Lin, ReLU, BatchNorm1d as BN
 from torch_geometric.datasets import ModelNet
 import torch_geometric.transforms as T
-from torch_geometric.data import DataLoader
+#from torch_geometric.data import DataLoader
+from datasetGeneric import DataLoader
 from torch_geometric.nn import PointConv, fps, radius, global_max_pool
 
 from torch_geometric.data.batch import Batch
@@ -59,8 +61,8 @@ class Net(torch.nn.Module):
         super(Net, self).__init__()
         torch.manual_seed(1)
 
-        self.sa1_module = SAModule(0.5, 0.2/3, MLP([3, 64, 64, 128]))
-        self.sa2_module = SAModule(0.25, 0.4/3, MLP([128 + 3, 128, 128, 256]))
+        self.sa1_module = SAModule(0.5, 0.2, MLP([3, 64, 64, 128]))
+        self.sa2_module = SAModule(0.25, 0.4, MLP([128 + 3, 128, 128, 256]))
         self.sa3_module = GlobalSAModule(MLP([256 + 3, 256, 512, 1024]))
 
         #self.sa1_module = SAModule(0.5, 0.1, MLP([3, 64, 64, 128]))  # 512 points
@@ -97,7 +99,8 @@ class Net(torch.nn.Module):
         x = F.relu(self.lin2(x))
         x = F.dropout(x, p=0.5, training=self.training)
         x = self.lin3(x)
-        x = F.normalize(x, dim=-1, p=2)  # L2 Normalization tips
+        # x = F.relu(self.lin3(x))
+        # x = F.normalize(x, dim=-1, p=2)  # L2 Normalization tips
         return x
         # return F.log_softmax(x, dim=-1)  # remember correct out shape
 
@@ -638,27 +641,21 @@ class TestNet55_descv2(torch.nn.Module):
         if isinstance(data, Batch):  # Batch before data, as a batch is a data
             pos, edge_index, batch = data.pos, data.edge_index, data.batch
         elif isinstance(data, Data):
-            batch = torch.zeros(data.pos.size(
-                0), dtype=torch.long, device=data.pos.device)
+            batch = torch.zeros(data.pos.size(0), dtype=torch.long, device=data.pos.device)
             pos, edge_index, batch = data.pos, data.edge_index, batch
+        elif isinstance(data, tuple):
+            pos, edge_index = data
+            batch = torch.zeros(pos.size(0), dtype=torch.long, device=pos.device)
         else:
             raise RuntimeError(f"Illegal data of type: {type(data)}")
         x = pos
 
-        x = self.conv1(x, edge_index)
-        x = self.batch1(x)
-        x = self.activation(x)
-
+        x = self.activation(self.batch1(self.conv1(x, edge_index)))
         x = self.activation(self.batch11(self.conv11(x, edge_index)))
         x = self.activation(self.batch12(self.conv12(x, edge_index)))
 
-        x = self.conv2(x, edge_index)
-        x = self.batch2(x)
-        x = self.activation(x)
-
-        x = self.conv3(x, edge_index)
-        x = self.batch3(x)
-        x = self.activation(x)
+        x = self.activation(self.batch2(self.conv2(x, edge_index)))
+        x = self.activation(self.batch3(self.conv3(x, edge_index)))
 
         x = self.activation(self.fc0(x))  # Per node fc
         
@@ -1299,7 +1296,8 @@ def train8_sia(model, siam, device, dataloader, optimizer, criterion):
         # Create dict again
         dic_descriptors = {}
         for i in range(len(batch_all.id)):
-            id = batch_all.id[i].item()
+            # id = batch_all.id[i].item()
+            id = batch_all.dataset_id[i]  # Use string name instead of idx id
             if id in dic_descriptors:
                 dic_descriptors[id].append(descritors[i])
             else:
@@ -1325,6 +1323,7 @@ def train8_sia(model, siam, device, dataloader, optimizer, criterion):
         indecies = torch.arange(all.shape[0]).to(device); # print(indecies)
         indecies = torch.combinations(indecies, r=2, with_replacement=True)
         assert indecies.shape[0] == labels_combi.shape[0]
+        indiecies_org = indecies
         
         # balance
         # Find indecies for all positive.
@@ -1348,7 +1347,9 @@ def train8_sia(model, siam, device, dataloader, optimizer, criterion):
         # print(labels_combi[:2600].sum())
         # print(labels_combi.sum())
         # print("cat", indecies.shape)
-        middle = labels_combi.shape[0]//2
+        
+        middle = indecies_pos.shape[0]  # middle = labels_combi.shape[0]//2 becaome wrong when it was odd
+
         assert labels_combi[:middle].sum().eq(middle).item()  # The first half should all be "1"
         assert labels_combi[middle:].sum().eq(0).item()  # The seconds half should all be "0"
 
@@ -1372,66 +1373,91 @@ def train8_sia(model, siam, device, dataloader, optimizer, criterion):
             correct_neg_pair.append((results_neg_pair<=0.5).sum().item())
     return losses, correct, correct_pos_pair, correct_neg_pair
 
+# import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
+import realEvaluation as evaluation
+import reduction_transform
 def test_8_convnet_triplet():
     POST_TRANSFORM = T.Compose([T.FaceToEdge(remove_faces=True), T.NormalizeScale()])
-    # POST_TRANSFORM = T.NormalizeScale(), T.SamplePoints(1024)
+    # POST_TRANSFORM = T.Compose([T.NormalizeScale(), T.SamplePoints(1024), reduction_transform.DelaunayIt(), T.FaceToEdge(remove_faces=True)])
     torch.manual_seed(1)
     torch.cuda.manual_seed(1)
     start_epoch = 1  # re-written if starting from a loaded save
+    default_epoch_per_log = 50
+    
+    valid = ["bu3dfe", "bosp", "frgc"]
+    train_on = "frgc"
+    assert train_on in valid
 
+    # Global properties
+    pickled = True
+    force = False
+    sample = "2pass"
+    # sample_size = [1024*8, 1024*12]
+    sample_size = [1024*2, 1024*6]
 
     import datasetBU3DFEv2
     from datasetGeneric import GenericDataset
     bu3dfe_path = "/lhome/haakowar/Downloads/BU_3DFE"
-    bu3dfe_dict =  datasetBU3DFEv2.get_bu3dfe_dict(bu3dfe_path, pickled=True, force=False)
+    bu3dfe_dict =  datasetBU3DFEv2.get_bu3dfe_dict(bu3dfe_path, pickled=pickled, force=force, picke_name="/tmp/Bu3dfe-2048.p", sample="bruteforce", sample_size=1024*2)
     dataset_bu3dfe = GenericDataset(bu3dfe_dict, POST_TRANSFORM)
     train_set, test_set = torch.utils.data.random_split(dataset_bu3dfe, [80, 20])
     # Regular dataloader followed by two test dataloader (seen data, and unseen data)
-    dataloader_bu3dfe = DataLoader(dataset=train_set, batch_size=8, shuffle=True, num_workers=0, drop_last=True)
-    dataloader_bu3dfe_train = DataLoader(dataset=train_set, batch_size=2, shuffle=False, num_workers=0, drop_last=False)
-    dataloader_bu3dfe_test = DataLoader(dataset=test_set, batch_size=2, shuffle=False, num_workers=0, drop_last=False)
-    dataloader_bu3dfe_all = DataLoader(dataset=dataset_bu3dfe, batch_size=2, shuffle=False, num_workers=0, drop_last=False)
-    # dataloader = dataloader_bu3dfe
+    dataloader_bu3dfe_train = DataLoader(dataset=train_set, batch_size=5, shuffle=False, num_workers=0, drop_last=False)
+    dataloader_bu3dfe_test = DataLoader(dataset=test_set, batch_size=5, shuffle=False, num_workers=0, drop_last=False)
+    dataloader_bu3dfe_all = DataLoader(dataset=dataset_bu3dfe, batch_size=5, shuffle=False, num_workers=0, drop_last=False)
+    if train_on == "bu3dfe":
+        dataloader = DataLoader(dataset=train_set, batch_size=10, shuffle=True, num_workers=0, drop_last=True)
 
     import datasetBosphorus
     bosphorus_path = "/lhome/haakowar/Downloads/Bosphorus/BosphorusDB"
     # bosphorus_dict = datasetBosphorus.get_bosphorus_dict("/tmp/invalid", pickled=True)
-    bosphorus_dict = datasetBosphorus.get_bosphorus_dict(bosphorus_path, pickled=True, force=False, picke_name="/tmp/Bosphorus_cache-full-2pass.p")
+    # "/tmp/Bosphorus_cache-full-2pass.p"
+    bosphorus_dict = datasetBosphorus.get_bosphorus_dict(bosphorus_path, pickled=pickled, force=force, picke_name="/tmp/Bosphorus-2048-filter.p", sample=sample, sample_size=sample_size)
     dataset_bosphorus = GenericDataset(bosphorus_dict, POST_TRANSFORM)
     bosphorus_train_set, bosphorus_test_set = torch.utils.data.random_split(dataset_bosphorus, [80, 25])
     dataloader_bosphorus_test = DataLoader(dataset=bosphorus_test_set, batch_size=2, shuffle=False, num_workers=0, drop_last=False)
     dataloader_bosphorus_train = DataLoader(dataset=bosphorus_train_set, batch_size=2, shuffle=False, num_workers=0, drop_last=False)
-    dataloader_bosphorus_all = DataLoader(dataset=dataset_bosphorus, batch_size=2, shuffle=False, num_workers=0, drop_last=False)
-    # dataloader = DataLoader(dataset=bosphorus_train_set, batch_size=4, shuffle=True, num_workers=0, drop_last=True)
+    dataloader_bosphorus_all = DataLoader(dataset=dataset_bosphorus, batch_size=5, shuffle=False, num_workers=0, drop_last=False)
+    if train_on == "bosp":
+        dataloader = DataLoader(dataset=bosphorus_train_set, batch_size=4, shuffle=True, num_workers=0, drop_last=True)
 
     from datasetFRGC import get_frgc_dict
     frgc_path = "/lhome/haakowar/Downloads/FRGCv2/Data/"
-    dataset_frgc_fall_2003 = get_frgc_dict(frgc_path + "Fall2003range", pickled=True, force=False, picke_name="FRGCv2-fall2003_cache.p")
-    dataset_frgc_spring_2003 = get_frgc_dict(frgc_path + "Spring2003range", pickled=True, force=False, picke_name="FRGCv2-spring2003_cache.p")
-    dataset_frgc_spring_2004 = get_frgc_dict(frgc_path + "Spring2004range", pickled=True, force=False, picke_name="FRGCv2-spring2004_cache.p")
+    dataset_frgc_fall_2003 = get_frgc_dict(frgc_path + "Fall2003range", pickled=pickled, force=force, picke_name="/tmp/FRGCv2-fall2003_cache-2048.p", sample=sample, sample_size=sample_size)
+    dataset_frgc_spring_2003 = get_frgc_dict(frgc_path + "Spring2003range", pickled=pickled, force=force, picke_name="/tmp/FRGCv2-spring2003_cache-2048.p", sample=sample, sample_size=sample_size)
+    dataset_frgc_spring_2004 = get_frgc_dict(frgc_path + "Spring2004range", pickled=pickled, force=force, picke_name="/tmp/FRGCv2-spring2004_cache-2048.p", sample=sample, sample_size=sample_size)
     dataset_frgc_fall_2003 = GenericDataset(dataset_frgc_fall_2003, POST_TRANSFORM)
     dataset_frgc_spring_2003 = GenericDataset(dataset_frgc_spring_2003, POST_TRANSFORM)
     dataset_frgc_spring_2004 = GenericDataset(dataset_frgc_spring_2004, POST_TRANSFORM)
-    dataloader_frgc_test = DataLoader(dataset=dataset_frgc_fall_2003, batch_size=2, shuffle=False, num_workers=0, drop_last=False)
-    dataset_frgc_train = torch.utils.data.ConcatDataset([dataset_frgc_spring_2003, dataset_frgc_spring_2004])
+    dataset_frgc_test = torch.utils.data.ConcatDataset([dataset_frgc_fall_2003, dataset_frgc_spring_2004])  # As per doc, Spring2003 is train, rest is val
+    dataset_frgc_train = torch.utils.data.ConcatDataset([dataset_frgc_spring_2003])  # As per doc, Spring2003 is train, rest is val
+    dataloader_frgc_test = DataLoader(dataset=dataset_frgc_test, batch_size=2, shuffle=False, num_workers=0, drop_last=False)
     dataloader_frgc_train = DataLoader(dataset=dataset_frgc_train, batch_size=2, shuffle=False, num_workers=0, drop_last=False)
     dataset_frgc_all = torch.utils.data.ConcatDataset([dataset_frgc_fall_2003, dataset_frgc_spring_2003, dataset_frgc_spring_2004])
-    dataloader_frgc_all = DataLoader(dataset=dataset_frgc_all, batch_size=2, shuffle=False, num_workers=0, drop_last=False)
-    dataloader = DataLoader(dataset=dataset_frgc_train, batch_size=5, shuffle=True, num_workers=0, drop_last=True)
+    dataloader_frgc_all = DataLoader(dataset=dataset_frgc_all, batch_size=5, shuffle=False, num_workers=0, drop_last=False)
+    if train_on == "frgc":
+        dataloader = DataLoader(dataset=dataset_frgc_train, batch_size=5, shuffle=True, num_workers=0, drop_last=True)
+
+    from dataset3DFace import get_3dface_dict
+    d3face_path = "/lhome/haakowar/Downloads/3DFace_DB/3DFace_DB/"
+    d3face_dict = get_3dface_dict(d3face_path, pickled=pickled, force=force, picke_name="/tmp/3dface-12k.p", sample="all", sample_size=4096*3)
+    d3face_dataset_all = GenericDataset(d3face_dict, POST_TRANSFORM)
+    dataloader_3dface_all = DataLoader(dataset=d3face_dataset_all, batch_size=5, shuffle=False, num_workers=0, drop_last=False)
 
     # Load the model
     assert torch.cuda.is_available()
     device = torch.device('cuda')
     model = TestNet55_descv2().to(device)
-    # model = Net.to(device)
+    # model = Net().to(device)
     siam = Siamese_part().to(device)
     
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
     criterion = torch.nn.BCELoss()
 
     LOG = ask_for_writer(dataloader, optimizer)
     print(f"dataloader_batch: {dataloader.batch_size}, optimizer: {optimizer.state_dict()['param_groups'][0]['lr']}")
-    for epoch in range(start_epoch, 605):
+    for epoch in range(start_epoch, 5005):
         model.train()
         siam.train()
         losses, correct, correct_pos_pair, correct_neg_pair = train8_sia(model, siam, device, dataloader, optimizer, criterion)
@@ -1442,198 +1468,137 @@ def test_8_convnet_triplet():
         LOG.add_scalar("loss/train-avg", avg_loss, epoch)
 
         with torch.no_grad():
+            # if epoch == 2:
+            #     sample_data = next(iter(dataloader))
+            #     single_data = sample_data[0].get_example(0).to(device)
+            #     LOG.add_graph(model, [(single_data.pos, single_data.edge_index)])
+            
+            pr_curve_samples = 1023
             toprint = [[],[],[]]  # 3 types of metrics
-            if epoch % 5 == 0:
-                model.eval()
-                siam.eval()
 
-                # # Validation set
-                # bu3dfe_descriptor_dict = metrics.generate_descriptor_dict_from_dataloader(model=model, dataloader=dataloader_bu3dfe_test, device=device)
+            def savefig(fig, dir, name):
+                if type(LOG).__name__ != "Dummy":
+                    if not os.path.exists(dir):
+                        os.makedirs(dir)
+                    fig.savefig(os.path.join(dir, name), bbox_inches='tight')
+
+            def generate_rank1(metric, dataset_name, experiment_type, tag, print_order, short=True, loss=None):
+                loss = f"loss:{loss:.3f}, " if loss else ""
+                toprint[print_order].append(f"{experiment_type}-{dataset_name}-{tag}\t{loss}{metric.__str_short__() if short else metric}")
+                metric.log_minimal(f"{dataset_name}-{experiment_type}", tag, epoch, LOG)
+            
+            def generate_siamese_verification(siam, device, criterion, descriptor_dict, dataset_name, tag, print_order):
+                offload = "frgc" in dataset_name  # The FRGC dataset is so large that it needs to be offlaoded to the CPU
+                loss, metric, preds, labels = metrics.generate_metric_siamese(siam, device, criterion, descriptor_dict, offload)
+
+                full_name = f"{dataset_name}-siamese-verification"
+                toprint[print_order].append(f"siamese-verification-{dataset_name}-{tag},\tloss:{loss:.3f}, {metric}")
+                metric.log_maximal(full_name, tag, epoch, LOG)
+                LOG.add_scalar(f"loss/{full_name}-{tag}", loss, epoch)
+                LOG.add_pr_curve(f"{full_name}-pr/{tag}", labels, preds, epoch, num_thresholds=pr_curve_samples)
+                roc_fig =  metrics.generate_roc(labels, preds)
+
+                # Save figure
+                folderpath = os.path.join(logging_dir, logging_name, f"{full_name}-roc-{tag}")
+                savefig(roc_fig, folderpath, f"roc-{epoch}.pdf")
+                LOG.add_figure(f"{full_name}-roc/{tag}", roc_fig, epoch)
+                plt.close(roc_fig)
                 
-                # # Descriptor Rank1
-                # metric = metrics.get_metric_gallery_set_vs_probe_set_BU3DFE(bu3dfe_descriptor_dict)
-                # toprint[0].append(f"Descriptor-RANK-1-val   (BU-3DFE)\t{metric.__str_short__()}")
-                # metric.log_minimal("bu3dfe-descriptor-rank1", "val", epoch, LOG)
+            # Takes some arguments implicit, like model, siamese model, device, criterion
+            def generate_log_block(dataset_name, tag, dataloadr, gal_probe_split):
+                descriptor_dict = metrics.generate_descriptor_dict_from_dataloader(model=model, dataloader=dataloadr, device=device)
+                gallery_dict, probe_dict = gal_probe_split(descriptor_dict)
 
-                # # Siamese verification
-                # loss, metric = metrics.generate_metric_siamese(siam, device, criterion, bu3dfe_descriptor_dict)
-                # toprint[1].append(f"Siamese-verification-val  (BU-3DFE),\tloss:{loss:.3f}, {metric}")
-                # metric.log_maximal("bu3dfe-siamese-validation", "val", epoch, LOG)
-                # LOG.add_scalar("loss/val-bu3dfe-siamese-validation", loss, epoch)
-
-                # # Siamese Rank1
-                # loss, metric = metrics.get_siamese_rank1_gallery_set_vs_probe_set_BU3DFE(siam, device, criterion, bu3dfe_descriptor_dict)
-                # toprint[2].append(f"Siamese-rank1-val (BU-3DFE),\tloss:{loss:.3f}, {metric.__str_short__()}")
-                # metric.log_minimal("bu3dfe-siamese-rank1", "val", epoch, LOG)
-
-                # # Training set
-                # bu3dfe_descriptor_dict = metrics.generate_descriptor_dict_from_dataloader(model=model, dataloader=dataloader_bu3dfe_train, device=device)
-                
-                # # Descriptor Rank1
-                # metric = metrics.get_metric_gallery_set_vs_probe_set_BU3DFE(bu3dfe_descriptor_dict)
-                # toprint[0].append(f"Descriptor-RANK-1-train (BU-3DFE)\t{metric.__str_short__()}")
-                # metric.log_minimal("bu3dfe-descriptor-rank1", "train", epoch, LOG)
-
-                # # Siamese verification
-                # loss, metric = metrics.generate_metric_siamese(siam, device, criterion, bu3dfe_descriptor_dict)
-                # toprint[1].append(f"Siamese-verification-train (BU-3DFE),\tloss:{loss:.3f}, {metric}")
-                # metric.log_maximal("bu3dfe-siamese-validation", "train", epoch, LOG)
-                # LOG.add_scalar("loss/train-bu3dfe-siamese-validation", loss, epoch)
-
-                # # Siamese rank1
-                # loss, metric = metrics.get_siamese_rank1_gallery_set_vs_probe_set_BU3DFE(siam, device, criterion, bu3dfe_descriptor_dict)
-                # toprint[2].append(f"Siamese-rank1-train (BU-3DFE),\tloss:{loss:.3f}, {metric.__str_short__()}")
-                # metric.log_minimal("bu3dfe-siamese-rank1", "train", epoch, LOG)
-
-                # All
-                bu3dfe_descriptor_dict = metrics.generate_descriptor_dict_from_dataloader(model=model, dataloader=dataloader_bu3dfe_all, device=device)
-                
-                # Descriptor Rank1
-                metric = metrics.get_metric_gallery_set_vs_probe_set_BU3DFE(bu3dfe_descriptor_dict)
-                toprint[0].append(f"Descriptor-RANK-1-all   (BU-3DFE)\t{metric.__str_short__()}")
-                metric.log_minimal("bu3dfe-descriptor-rank1", "all", epoch, LOG)
+                # Descriptor rank1
+                metric = metrics.get_metric_gallery_set_vs_probe_set(gallery_dict, probe_dict)
+                generate_rank1(metric, dataset_name, "descriptor-rank1", tag, print_order=0)
 
                 # Siamese verification
-                loss, metric = metrics.generate_metric_siamese(siam, device, criterion, bu3dfe_descriptor_dict)
-                toprint[1].append(f"Siamese-verification-all  (BU-3DFE),\tloss:{loss:.3f}, {metric}")
-                metric.log_maximal("bu3dfe-siamese-validation", "all", epoch, LOG)
-                LOG.add_scalar("loss/all-bu3dfe-siamese-validation", loss, epoch)
+                generate_siamese_verification(siam, device, criterion, descriptor_dict, dataset_name, tag, print_order=1)
 
-                # # Siamese Rank1
-                loss, metric = metrics.get_siamese_rank1_gallery_set_vs_probe_set_BU3DFE(siam, device, criterion, bu3dfe_descriptor_dict)
-                toprint[2].append(f"Siamese-rank1-all (BU-3DFE),\tloss:{loss:.3f}, {metric.__str_short__()}")
-                metric.log_minimal("bu3dfe-siamese-rank1", "all", epoch, LOG)
+                # Siamese Rank1
+                loss, metric = metrics.generate_metirc_siamese_rank1(siam, device, criterion, gallery_dict, probe_dict)
+                generate_rank1(metric, dataset_name, "siamese-rank1", tag, print_order=2, loss=loss)
 
-            if epoch % 5 == 0:
-                model.eval()
-                siam.eval()
+                # ROC and CMC
+                def generate_cmc_or_roc_fig(combined_fig, type):
+                    folderpath = os.path.join(logging_dir, logging_name, f"{dataset_name}-siamese-{type}-combined-{tag}")
+                    savefig(combined_fig, folderpath, f"{type}-combined-{epoch}.pdf")
+                    LOG.add_figure(f"{dataset_name}-siamese-{type}-combined/{tag}", combined_fig, epoch)
+                    plt.close(combined_fig)
 
-                # # Validation
-                # bosphorus_descriptor_dict = metrics.generate_descriptor_dict_from_dataloader(model=model, dataloader=dataloader_bosphorus_test, device=device)
+                def genrate_cmc_and_roc(cmc_func, roc_func):
+                    combined_cmc_fig = cmc_func(descriptor_dict, siam, device)
+                    generate_cmc_or_roc_fig(combined_cmc_fig, "cmc")
+                    combined_roc_fig, combined_roc_fig_log, verification_rate, auc, fpr_vs_acc_fig = roc_func(descriptor_dict, siam, device)
+                    generate_cmc_or_roc_fig(combined_roc_fig, "roc")
+                    generate_cmc_or_roc_fig(combined_roc_fig_log, "roc-log")
+                    generate_cmc_or_roc_fig(fpr_vs_acc_fig, "fpr-acc-log")
+                    LOG.add_scalar(f"{dataset_name}-siamese-01VR/{tag}", verification_rate, epoch)
+                    LOG.add_scalar(f"{dataset_name}-siamese-auc/{tag}", auc, epoch)
 
-                # # Descriptor Rank1
-                # metric = metrics.get_metric_gallery_set_vs_probe_set_bosphorus(bosphorus_descriptor_dict)
-                # toprint[0].append(f"Descriptor-RANK-1-val   (bosphorus)\t{metric.__str_short__()}")
-                # metric.log_minimal("bosphorus-descriptor-rank1", "val", epoch, LOG)
+                if "bu3dfe" in dataset_name:
+                    if train_on != "bu3dfe": assert len(gallery_dict) == 100
+                    genrate_cmc_and_roc(evaluation.bu3dfe_generate_cmc, evaluation.bu3dfe_generate_roc)
+                if "bosp" in dataset_name:
+                    if train_on != "bosp": assert len(gallery_dict) == 105
+                    genrate_cmc_and_roc(evaluation.bosphorus_generate_cmc, evaluation.bosphorus_generate_roc)
+                if "frgc" in dataset_name:
+                    # if train_on != "frgc": assert len(gallery_dict) == 466
+                    genrate_cmc_and_roc(evaluation.frgc_generate_cmc, evaluation.frgc_generate_roc)
 
-                # # Siamese verification
-                # loss, metric = metrics.generate_metric_siamese(siam, device, criterion, bosphorus_descriptor_dict)
-                # toprint[1].append(f"Siamese-verification-val  (bosphorus),\tloss:{loss:.3f}, {metric}")
-                # metric.log_maximal("bosphorus-siamese-validation", "val", epoch, LOG)
-                # LOG.add_scalar("loss/val-bosphorus-siamese-validation", loss, epoch)
 
-                # # Siamese rank1
-                # loss, metric = metrics.get_siamese_rank1_gallery_set_vs_probe_set_bosphorus(siam, device, criterion, bosphorus_descriptor_dict)
-                # toprint[2].append(f"Siamese-rank1-val (bosphorus),\tloss:{loss:.3f}, {metric.__str_short__()}")
-                # metric.log_minimal("bosphorus-siamese-rank1", "val", epoch, LOG)
+            if epoch % default_epoch_per_log == 0:
+                model.eval(); siam.eval(); torch.cuda.empty_cache()
+                print("Testing on BU3DFE", end="\r")
 
-                # # Training set
-                # bosphorus_descriptor_dict = metrics.generate_descriptor_dict_from_dataloader(model=model, dataloader=dataloader_bosphorus_train, device=device)
+                if train_on == "bu3dfe":
+                    generate_log_block("bu3dfe", "val",   dataloader_bu3dfe_test,  metrics.split_gallery_set_vs_probe_set_BU3DFE)
+                    generate_log_block("bu3dfe", "train", dataloader_bu3dfe_train, metrics.split_gallery_set_vs_probe_set_BU3DFE)
+                else:
+                    generate_log_block("bu3dfe", "all", dataloader_bu3dfe_all, metrics.split_gallery_set_vs_probe_set_BU3DFE)
 
-                # # descriptor rank1
-                # metric = metrics.get_metric_gallery_set_vs_probe_set_bosphorus(bosphorus_descriptor_dict)
-                # toprint[0].append(f"Descriptor-RANK-1-train (bosphorus)\t{metric.__str_short__()}")
-                # metric.log_minimal("bosphorus-descriptor-rank1", "train", epoch, LOG)
+            if epoch % default_epoch_per_log == 0:
+                model.eval(); siam.eval(); torch.cuda.empty_cache()
+                print("Testing on Bosphorus", end="\r")
 
-                # # Siamese verification
-                # loss, metric = metrics.generate_metric_siamese(siam, device, criterion, bosphorus_descriptor_dict)
-                # toprint[1].append(f"Siamese-verification-train (bosphorus),\tloss:{loss:.3f}, {metric}")
-                # metric.log_maximal("bosphorus-siamese-validation", "train", epoch, LOG)
-                # LOG.add_scalar("loss/train-bosphorus-siamese-validation", loss, epoch)
+                if train_on == "bosp":
+                    generate_log_block("bosphorus", "val",   dataloader_bosphorus_test,  metrics.split_gallery_set_vs_probe_set_bosphorus)
+                    generate_log_block("bosphorus", "train", dataloader_bosphorus_train, metrics.split_gallery_set_vs_probe_set_bosphorus)
+                else:
+                    generate_log_block("bosphorus", "all", dataloader_bosphorus_all, metrics.split_gallery_set_vs_probe_set_bosphorus)
 
-                # # Siamese rank1
-                # loss, metric = metrics.get_siamese_rank1_gallery_set_vs_probe_set_bosphorus(siam, device, criterion, bosphorus_descriptor_dict)
-                # toprint[2].append(f"Siamese-rank1-train (bosphorus),\tloss:{loss:.3f}, {metric.__str_short__()}")
-                # metric.log_minimal("bosphorus-siamese-rank1", "train", epoch, LOG)
 
-                # All
-                bosphorus_descriptor_dict = metrics.generate_descriptor_dict_from_dataloader(model=model, dataloader=dataloader_bosphorus_all, device=device)
-                
-                # Rank1 descriptor
-                metric = metrics.get_metric_gallery_set_vs_probe_set_bosphorus(bosphorus_descriptor_dict)
-                toprint[0].append(f"Descriptor-RANK-1-all (bosphorus)\t{metric.__str_short__()}")
-                metric.log_minimal("bosphorus-descriptor-rank1", "all", epoch, LOG)
+            if epoch % default_epoch_per_log == 0:
+                model.eval(); siam.eval(); torch.cuda.empty_cache()
+                print("Testing on FRGC     ", end="\r")
 
-                # Siamese verification
-                loss, metric = metrics.generate_metric_siamese(siam, device, criterion, bosphorus_descriptor_dict)
-                toprint[1].append(f"Siamese-verification-all (bosphorus),\tloss:{loss:.3f}, {metric}")
-                metric.log_maximal("bosphorus-siamese-validation", "all", epoch, LOG)
-                LOG.add_scalar("loss/all-bosphorus-siamese-validation", loss, epoch)
+                if train_on == "frgc":
+                    generate_log_block("frgc", "val",   dataloader_frgc_train,  metrics.split_gallery_set_vs_probe_set_frgc)
+                    generate_log_block("frgc", "train", dataloader_frgc_test, metrics.split_gallery_set_vs_probe_set_frgc)
+                else:
+                    generate_log_block("frgc", "all", dataloader_frgc_all, metrics.split_gallery_set_vs_probe_set_frgc)
 
-                # Siamese rank1
-                loss, metric = metrics.get_siamese_rank1_gallery_set_vs_probe_set_bosphorus(siam, device, criterion, bosphorus_descriptor_dict)
-                toprint[2].append(f"Siamese-rank1-all (bosphorus),\tloss:{loss:.3f}, {metric.__str_short__()}")
-                metric.log_minimal("bosphorus-siamese-rank1", "all", epoch, LOG)
 
-            if epoch % 5 == 0:
-                model.eval()
-                siam.eval()
-                # Validation
-                frgc_descriptor_dict = metrics.generate_descriptor_dict_from_dataloader(model=model, dataloader=dataloader_frgc_train, device=device)
-
-                # Descriptor Rank1
-                metric = metrics.get_metric_gallery_set_vs_probe_set_frgc(frgc_descriptor_dict)
-                toprint[0].append(f"Descriptor-RANK-1-val   (frgc)\t{metric.__str_short__()}")
-                metric.log_minimal("frgc-descriptor-rank1", "val", epoch, LOG)
-
-                # Siamese verification
-                loss, metric = metrics.generate_metric_siamese(siam, device, criterion, frgc_descriptor_dict)
-                toprint[1].append(f"Siamese-verification-val  (frgc),\tloss:{loss:.3f}, {metric}")
-                metric.log_maximal("frgc-siamese-validation", "val", epoch, LOG)
-                LOG.add_scalar("loss/val-frgc-siamese-validation", loss, epoch)
-
-                # Siamese rank1
-                loss, metric = metrics.get_siamese_rank1_gallery_set_vs_probe_set_frgc(siam, device, criterion, frgc_descriptor_dict)
-                toprint[2].append(f"Siamese-rank1-val (frgc),\tloss:{loss:.3f}, {metric.__str_short__()}")
-                metric.log_minimal("frgc-siamese-rank1", "val", epoch, LOG)
-
-                # Training set
-                frgc_descriptor_dict = metrics.generate_descriptor_dict_from_dataloader(model=model, dataloader=dataloader_frgc_test, device=device)
-
-                # descriptor rank1
-                metric = metrics.get_metric_gallery_set_vs_probe_set_frgc(frgc_descriptor_dict)
-                toprint[0].append(f"Descriptor-RANK-1-train (frgc)\t{metric.__str_short__()}")
-                metric.log_minimal("frgc-descriptor-rank1", "train", epoch, LOG)
-
-                # Siamese verification
-                loss, metric = metrics.generate_metric_siamese(siam, device, criterion, frgc_descriptor_dict)
-                toprint[1].append(f"Siamese-verification-train (frgc),\tloss:{loss:.3f}, {metric}")
-                metric.log_maximal("frgc-siamese-validation", "train", epoch, LOG)
-                LOG.add_scalar("loss/train-frgc-siamese-validation", loss, epoch)
-
-                # Siamese rank1
-                loss, metric = metrics.get_siamese_rank1_gallery_set_vs_probe_set_frgc(siam, device, criterion, frgc_descriptor_dict)
-                toprint[2].append(f"Siamese-rank1-train (frgc),\tloss:{loss:.3f}, {metric.__str_short__()}")
-                metric.log_minimal("frgc-siamese-rank1", "train", epoch, LOG)
-
-                # # All
-                # frgc_descriptor_dict = metrics.generate_descriptor_dict_from_dataloader(model=model, dataloader=dataloader_frgc_all, device=device)
-                
-                # # Descriptor rank1
-                # metric = metrics.get_metric_gallery_set_vs_probe_set_frgc(frgc_descriptor_dict)
-                # toprint[0].append(f"Descriptor-RANK-1-all (FRGC)\t{metric.__str_short__()}")
-                # metric.log_minimal("frgc-descriptor-rank1", "all", epoch, LOG)
-
-                # # Siamese verification
-                # loss, metric = metrics.generate_metric_siamese(siam, device, criterion, frgc_descriptor_dict)
-                # toprint[1].append(f"Siamese-verification-all (FRGC),\t\tloss:{loss:.3f}, {metric}")
-                # metric.log_maximal("frgc-siamese-validation", "all", epoch, LOG)
-                # LOG.add_scalar("loss/all-frgc-siamese-validation", loss, epoch)
-
-                # # Siamese rank1
-                # loss, metric = metrics.get_siamese_rank1_gallery_set_vs_probe_set_frgc(siam, device, criterion, frgc_descriptor_dict)
-                # toprint[2].append(f"Siamese-rank1-all (frgc),\tloss:{loss:.3f}, {metric.__str_short__()}")
-                # metric.log_minimal("frgc-siamese-rank1", "all", epoch, LOG)
+            # if epoch % default_epoch_per_log == 0:
+            #     model.eval(); siam.eval(); torch.cuda.empty_cache()
+            #     print("Testing on 3dface    ", end="\r")
+            #     generate_log_block("3dface", "all", dataloader_3dface_all, metrics.split_gallery_set_vs_probe_set_3dface)
 
 
             if sum(len(section) for section in toprint) > 0:
+                print(" "*20, end="\r")
                 for section in toprint:
                     for line in section:
                         print(line)
                 torch.cuda.empty_cache()  # Needed to stop memory leak... TODO figure out why metric uses 4gb ish ram, or just allow it
+                plt.close("all")  # matplotlib didnt register the plots are correctly closed. Force all plots to close
 
-# ask_for_writer(dataloader, optimizer)
+import os
+logging_dir = "logging-siamese-1905-namechange-trash"
+logging_name = ""
 def ask_for_writer(dataloader, optimizer):
+    global logging_name
     batch_size = dataloader.batch_size
     lr = optimizer.state_dict()['param_groups'][0]['lr']
     import inspect
@@ -1650,16 +1615,22 @@ def ask_for_writer(dataloader, optimizer):
 
     if extra == "q" or not extra:
         print("Logging disabled")
+        import random
+        logging_name = "q" + str(random.randint(0, 1000))
         class Dummy:
-            def add_scalar(*args):
+            def add_scalar(*args, **kwargs):  # Dummy function that can take any argument
                 return
+            def __getattr__(self, attr):  # Overwrite python class get func
+                return self.add_scalar
         return Dummy()
 
     navn = f"{str(dato)}_lr{lr:1.0e}_batchsize{batch_size}_{extra.replace(' ', '-')}"
+    logging_name = navn
     import os
     from torch.utils.tensorboard import SummaryWriter
-    WRITER = SummaryWriter(log_dir=os.path.join("logging-siamese-bosph", navn))
+    WRITER = SummaryWriter(log_dir=os.path.join(logging_dir, navn))
     print("Logging enabled: " + navn)
+    print("Full path: " + logging_dir + "/" + navn)
     return WRITER
 
 if __name__ == '__main__':
