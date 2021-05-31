@@ -13,9 +13,10 @@ conda create -n pytorch-geometric python=3.8 --yes
 conda activate pytorch-geometric
 conda install -c pytorch pytorch=1.7.0 torchvision cudatoolkit=11.0 --yes
 conda install scipy tensorboard --yes
-conda install -c conda-forge trimesh pyyaml
-conda install -c open3d-admin open3d
-pip3 install addict open3d # what
+conda install -c conda-forge trimesh pyyaml --yes
+conda install -c open3d-admin open3d --yes
+pip3 install addict open3d --yes # what, again?
+pip3 install openmesh  # ATM is not 3.8 supported via conda, manually build (needs cmake)
 
 pip install --no-index torch-scatter -f https://pytorch-geometric.com/whl/torch-1.7.0+cu110.html
 pip install --no-index torch-sparse -f https://pytorch-geometric.com/whl/torch-1.7.0+cu110.html
