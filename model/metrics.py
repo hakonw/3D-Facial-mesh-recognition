@@ -1,3 +1,4 @@
+from numpy.core.numeric import indices
 from torch_geometric.data import Data
 import torch_geometric.utils
 import torch
@@ -673,6 +674,55 @@ def generate_metric_siamese_roc_bal(siamese, device, gallery_descriptors_dict, p
 
     assert y_true.shape[0] == y_score.shape[0]
 
+    return y_true, y_score
+
+@torch.no_grad()
+def generate_metric_siamese_roc_bal_all(siamese, device, dict):
+    siamese.eval()
+
+    datas, labels = generate_flat_descriptor_dict(dict, device)
+
+        
+    indecies = torch.arange(datas.shape[0]).to(device); # Create indicies for all possible conbinations
+    indecies = torch.combinations(indecies, r=2, with_replacement=True)
+    labels_combi = labels[indecies[:, 0]].eq(labels[indecies[:, 1]])
+
+    # balance
+    # Find indecies for all positive.
+    indecies_pos = indecies[labels_combi.eq(1)]
+    label_pos = labels_combi[labels_combi.eq(1)]
+
+    # Find indecies for alle negative pairs
+    t_seed = torch.get_rng_state(); t_seed_gpu = torch.cuda.get_rng_state(device); t_seed_rand = torch.random.get_rng_state()
+    torch.random.manual_seed(1); torch.cuda.manual_seed(1); torch.manual_seed(1)
+    mask_neg = torch.randperm(indecies[labels_combi.eq(0)].shape[0])[:indecies_pos.shape[0]]  # Create a random mask of the same size as indicies pos
+    torch.random.set_rng_state(t_seed_rand); torch.cuda.set_rng_state(t_seed_gpu, device); torch.set_rng_state(t_seed)
+
+    indecies_neg = indecies[labels_combi.eq(0)][mask_neg]
+    label_neg = labels_combi[labels_combi.eq(0)][mask_neg]
+    assert indecies_pos.shape[0] == indecies_neg.shape[0]
+    assert indecies_pos.shape[0] == label_pos.shape[0]
+    assert label_pos.shape[0] == label_neg.shape[0]
+
+     # Cobmine for all indecies to give to the model
+    indecies = torch.cat((indecies_pos, indecies_neg), dim=0)
+    labels_combi = torch.cat((label_pos, label_neg), dim=0)
+
+    middle = indecies_pos.shape[0]  # middle = labels_combi.shape[0]//2 becaome wrong when it was odd
+    assert labels_combi[:middle].sum().eq(middle).item()  # The first half should all be "1"
+    assert labels_combi[middle:].sum().eq(0).item()  # The seconds half should all be "0"
+
+    descriptors_combi_1 = datas[indecies[:, 0]]
+    descriptors_combi_2 = datas[indecies[:, 1]]
+
+    # [N positive pairs + N negative pairs, descriptors]
+    result = siamese(descriptors_combi_1, descriptors_combi_2)
+
+    # Flatten
+    y_score = result.flatten()
+    y_true = labels_combi
+
+    assert y_true.shape[0] == y_score.shape[0]
     return y_true, y_score
 
 @torch.no_grad()

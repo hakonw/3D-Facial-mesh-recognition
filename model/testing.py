@@ -1385,8 +1385,8 @@ def test_8_convnet_triplet():
     start_epoch = 1  # re-written if starting from a loaded save
     default_epoch_per_log = 50
     
-    valid = ["bu3dfe", "bosp", "frgc"]
-    train_on = "frgc"
+    valid = ["bu3dfe", "bosp", "frgc", "bosp+frgc"]
+    train_on = "bosp"
     assert train_on in valid
 
     # Global properties
@@ -1401,13 +1401,13 @@ def test_8_convnet_triplet():
     bu3dfe_path = "/lhome/haakowar/Downloads/BU_3DFE"
     bu3dfe_dict =  datasetBU3DFEv2.get_bu3dfe_dict(bu3dfe_path, pickled=pickled, force=force, picke_name="/tmp/Bu3dfe-2048.p", sample="bruteforce", sample_size=1024*2)
     dataset_bu3dfe = GenericDataset(bu3dfe_dict, POST_TRANSFORM)
-    train_set, test_set = torch.utils.data.random_split(dataset_bu3dfe, [80, 20])
+    bu3dfe_train_set, bu3dfe_test_set = torch.utils.data.random_split(dataset_bu3dfe, [80, 20])
     # Regular dataloader followed by two test dataloader (seen data, and unseen data)
-    dataloader_bu3dfe_train = DataLoader(dataset=train_set, batch_size=5, shuffle=False, num_workers=0, drop_last=False)
-    dataloader_bu3dfe_test = DataLoader(dataset=test_set, batch_size=5, shuffle=False, num_workers=0, drop_last=False)
+    dataloader_bu3dfe_train = DataLoader(dataset=bu3dfe_train_set, batch_size=5, shuffle=False, num_workers=0, drop_last=False)
+    dataloader_bu3dfe_test = DataLoader(dataset=bu3dfe_test_set, batch_size=5, shuffle=False, num_workers=0, drop_last=False)
     dataloader_bu3dfe_all = DataLoader(dataset=dataset_bu3dfe, batch_size=5, shuffle=False, num_workers=0, drop_last=False)
     if train_on == "bu3dfe":
-        dataloader = DataLoader(dataset=train_set, batch_size=10, shuffle=True, num_workers=0, drop_last=True)
+        dataloader = DataLoader(dataset=bu3dfe_train_set, batch_size=10, shuffle=True, num_workers=0, drop_last=True)
 
     import datasetBosphorus
     bosphorus_path = "/lhome/haakowar/Downloads/Bosphorus/BosphorusDB"
@@ -1430,10 +1430,10 @@ def test_8_convnet_triplet():
     dataset_frgc_fall_2003 = GenericDataset(dataset_frgc_fall_2003, POST_TRANSFORM)
     dataset_frgc_spring_2003 = GenericDataset(dataset_frgc_spring_2003, POST_TRANSFORM)
     dataset_frgc_spring_2004 = GenericDataset(dataset_frgc_spring_2004, POST_TRANSFORM)
-    dataset_frgc_test = torch.utils.data.ConcatDataset([dataset_frgc_fall_2003, dataset_frgc_spring_2004])  # As per doc, Spring2003 is train, rest is val
     dataset_frgc_train = torch.utils.data.ConcatDataset([dataset_frgc_spring_2003])  # As per doc, Spring2003 is train, rest is val
-    dataloader_frgc_test = DataLoader(dataset=dataset_frgc_test, batch_size=2, shuffle=False, num_workers=0, drop_last=False)
+    dataset_frgc_test = torch.utils.data.ConcatDataset([dataset_frgc_fall_2003, dataset_frgc_spring_2004])  # As per doc, Spring2003 is train, rest is val
     dataloader_frgc_train = DataLoader(dataset=dataset_frgc_train, batch_size=2, shuffle=False, num_workers=0, drop_last=False)
+    dataloader_frgc_test = DataLoader(dataset=dataset_frgc_test, batch_size=2, shuffle=False, num_workers=0, drop_last=False)
     dataset_frgc_all = torch.utils.data.ConcatDataset([dataset_frgc_fall_2003, dataset_frgc_spring_2003, dataset_frgc_spring_2004])
     dataloader_frgc_all = DataLoader(dataset=dataset_frgc_all, batch_size=5, shuffle=False, num_workers=0, drop_last=False)
     if train_on == "frgc":
@@ -1444,6 +1444,16 @@ def test_8_convnet_triplet():
     d3face_dict = get_3dface_dict(d3face_path, pickled=pickled, force=force, picke_name="/tmp/3dface-12k.p", sample="all", sample_size=4096*3)
     d3face_dataset_all = GenericDataset(d3face_dict, POST_TRANSFORM)
     dataloader_3dface_all = DataLoader(dataset=d3face_dataset_all, batch_size=5, shuffle=False, num_workers=0, drop_last=False)
+
+
+    def dload(dataset, batch_size, predicable):
+        return DataLoader(dataset=dataset, batch_size=batch_size, shuffle=not predicable, num_workers=0, drop_last=not predicable)
+    # Combination:
+    # Trained on BOSP + FRGC, 
+    if train_on == "bosp+frgc":
+        dataset_frgc_bosp_train = torch.utils.data.ConcatDataset([bosphorus_train_set, dataset_frgc_train])
+        dataloader = dload(dataset_frgc_bosp_train, 10, False)
+        # TODO combine val data?
 
     # Load the model
     assert torch.cuda.is_available()
@@ -1530,18 +1540,27 @@ def test_8_convnet_triplet():
                 def genrate_cmc_and_roc(cmc_func, roc_func):
                     combined_cmc_fig = cmc_func(descriptor_dict, siam, device)
                     generate_cmc_or_roc_fig(combined_cmc_fig, "cmc")
-                    combined_roc_fig, combined_roc_fig_log, verification_rate, auc, fpr_vs_acc_fig = roc_func(descriptor_dict, siam, device)
+                    combined_roc_fig, combined_roc_fig_log, verification_rates, auc, fpr_vs_acc_fig, ap = roc_func(descriptor_dict, siam, device)
                     generate_cmc_or_roc_fig(combined_roc_fig, "roc")
                     generate_cmc_or_roc_fig(combined_roc_fig_log, "roc-log")
                     generate_cmc_or_roc_fig(fpr_vs_acc_fig, "fpr-acc-log")
-                    LOG.add_scalar(f"{dataset_name}-siamese-01VR/{tag}", verification_rate, epoch)
+                    LOG.add_scalar(f"{dataset_name}-siamese-01VR/{tag}", verification_rates[0], epoch)
+                    LOG.add_scalar(f"{dataset_name}-siamese-1VR/{tag}", verification_rates[1], epoch)
                     LOG.add_scalar(f"{dataset_name}-siamese-auc/{tag}", auc, epoch)
+                    LOG.add_scalar(f"{dataset_name}-siamese-ap/{tag}", ap, epoch)
+
+                    _, _, verification_rates, auc, _, ap = evaluation.all_v_all_generate_roc(descriptor_dict, siam, device)
+                    LOG.add_scalar(f"{dataset_name}-siamese-all-01VR/{tag}", verification_rates[0], epoch)
+                    LOG.add_scalar(f"{dataset_name}-siamese-all-1VR/{tag}", verification_rates[1], epoch)
+                    LOG.add_scalar(f"{dataset_name}-siamese-all-auc/{tag}", auc, epoch)
+                    LOG.add_scalar(f"{dataset_name}-siamese-all-ap/{tag}", ap, epoch)
+
 
                 if "bu3dfe" in dataset_name:
-                    if train_on != "bu3dfe": assert len(gallery_dict) == 100
+                    # if train_on != "bu3dfe": assert len(gallery_dict) == 100
                     genrate_cmc_and_roc(evaluation.bu3dfe_generate_cmc, evaluation.bu3dfe_generate_roc)
                 if "bosp" in dataset_name:
-                    if train_on != "bosp": assert len(gallery_dict) == 105
+                    # if train_on != "bosp": assert len(gallery_dict) == 105
                     genrate_cmc_and_roc(evaluation.bosphorus_generate_cmc, evaluation.bosphorus_generate_roc)
                 if "frgc" in dataset_name:
                     # if train_on != "frgc": assert len(gallery_dict) == 466
@@ -1552,7 +1571,7 @@ def test_8_convnet_triplet():
                 model.eval(); siam.eval(); torch.cuda.empty_cache()
                 print("Testing on BU3DFE", end="\r")
 
-                if train_on == "bu3dfe":
+                if "bu3dfe" in train_on:
                     generate_log_block("bu3dfe", "val",   dataloader_bu3dfe_test,  metrics.split_gallery_set_vs_probe_set_BU3DFE)
                     generate_log_block("bu3dfe", "train", dataloader_bu3dfe_train, metrics.split_gallery_set_vs_probe_set_BU3DFE)
                 else:
@@ -1562,7 +1581,7 @@ def test_8_convnet_triplet():
                 model.eval(); siam.eval(); torch.cuda.empty_cache()
                 print("Testing on Bosphorus", end="\r")
 
-                if train_on == "bosp":
+                if "bosp" in train_on:
                     generate_log_block("bosphorus", "val",   dataloader_bosphorus_test,  metrics.split_gallery_set_vs_probe_set_bosphorus)
                     generate_log_block("bosphorus", "train", dataloader_bosphorus_train, metrics.split_gallery_set_vs_probe_set_bosphorus)
                 else:
@@ -1573,7 +1592,7 @@ def test_8_convnet_triplet():
                 model.eval(); siam.eval(); torch.cuda.empty_cache()
                 print("Testing on FRGC     ", end="\r")
 
-                if train_on == "frgc":
+                if "frgc" in train_on:
                     generate_log_block("frgc", "val",   dataloader_frgc_train,  metrics.split_gallery_set_vs_probe_set_frgc)
                     generate_log_block("frgc", "train", dataloader_frgc_test, metrics.split_gallery_set_vs_probe_set_frgc)
                 else:
@@ -1593,6 +1612,11 @@ def test_8_convnet_triplet():
                         print(line)
                 torch.cuda.empty_cache()  # Needed to stop memory leak... TODO figure out why metric uses 4gb ish ram, or just allow it
                 plt.close("all")  # matplotlib didnt register the plots are correctly closed. Force all plots to close
+        
+        if epoch % 500 == 0 and type(LOG).__name__ != "Dummy":
+            name = f"{logging_dir}/{logging_name}/model-{epoch}.pt"
+            print(f"Saving {name}")
+            torch.save(model.state_dict(), name)
 
 import os
 logging_dir = "logging-siamese-1905-namechange-trash"

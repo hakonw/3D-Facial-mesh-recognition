@@ -2,14 +2,16 @@
 import metrics
 import matplotlib.pyplot as plt
 
+markers = ["o", "^", "p", "X"]
+colors = ["darkorange", "orangered", "royalblue", "limegreen"]
+
+
 
 # Generic CMC
 def generate_cmc_from_lists(ir_ranks, labels):
     def plotit(array, marker, color, label):
         plt.plot(list(range(1, len(array)+1)), array, marker=marker, lw=2, color=color, label=label, clip_on=False)
     
-    markers = ["o", "^", "p"]
-    colors = ["darkorange", "orangered", "royalblue"]
     assert len(ir_ranks) == len(labels)
 
     fig = plt.figure()
@@ -135,8 +137,6 @@ def generate_roc_from_lists(false_positive_rates, recalls, roc_aucs, labels, log
     def plotit(fpr, recall, roc_auc, marker, color, label):
         plt.plot(fpr, recall, lw=2, color=color, label=f"{label}, AUC = {roc_auc:.3f}", clip_on=True)   # No marker
     
-    markers = ["o", "^", "p"]
-    colors = ["darkorange", "orangered", "royalblue"]
     assert len(false_positive_rates) == len(recalls)
     assert len(false_positive_rates) == len(roc_aucs)
     assert len(false_positive_rates) == len(labels)
@@ -165,12 +165,14 @@ def generate_roc_from_lists(false_positive_rates, recalls, roc_aucs, labels, log
 
 
 
-def generate_acc_fpr(false_positive_rates, accuracies, label):
-    colors = ["darkorange", "orangered", "royalblue"]
-    assert len(false_positive_rates) == len(accuracies)
+def generate_acc_fpr(false_positive_rates, accuracies, labels):
+    assert len(false_positive_rates[0]) == len(accuracies[0])
     fig = plt.figure()
-    plt.title("Validation Rate at different Trasholds")
-    plt.plot(false_positive_rates, accuracies, lw=2, color=colors[0], label=f"{label}", clip_on=True)   # No marker
+    plt.title("Validation Rate at different thresholds")
+    assert len(false_positive_rates) == len(accuracies)
+    assert len(false_positive_rates) == len(labels)
+    for i in range(len(labels)):
+        plt.plot(false_positive_rates[i], accuracies[i], lw=2, color=colors[i], label=f"{labels[i]}", clip_on=True)   # No marker
     plt.legend(loc="lower right")
     # plt.legend(loc="upper left")
     x = np.linspace(0,1,101)
@@ -184,7 +186,18 @@ def generate_acc_fpr(false_positive_rates, accuracies, label):
     plt.ylim(bottom=0.43, top=1.05)
     return fig
 
-def generate_veritication_rate(y_true, y_score, FAR_target=0.001): # TODO 0.001
+import inspect
+def generate_verification_rates(y_trues, y_scores):
+    accs, accuracies, fpr = [], [], []
+    assert len(y_trues) == len(y_scores)
+    for i in range(len(y_trues)):
+        a1, a2, f = generate_veritication_rate(y_trues[i], y_scores[i])
+        accs.append(a1)
+        accuracies.append(a2)
+        fpr.append(f)
+    return accs, accuracies, fpr
+
+def generate_veritication_rate(y_true, y_score, FAR_targets=[0.001, 0.01]): # TODO 0.001
     y_true = y_true.cpu()
     y_score = y_score.cpu()
 
@@ -198,24 +211,31 @@ def generate_veritication_rate(y_true, y_score, FAR_target=0.001): # TODO 0.001
     
     #total_negative = fps[-1]
     #total_positive = tps[-1]
+    total = y_true.shape[0]
+    accs = []
 
     # Tresholds is decreasing, and fpr is increasing
-    optimal_tresh = 1.0
-    achived_fpr = 0.0
-    next_fpr = 0.0
-    for i in range(len(thresholds)):
-        if fpr[i] > FAR_target:
-            assert fpr[i-1] <= FAR_target
-            optimal_tresh = thresholds[i-1]
-            achived_fpr = fpr[i-1]
-            next_fpr = fpr[i]
-            break
+    for FAR_target in FAR_targets:
+        optimal_tresh = 1.0
+        achived_fpr = 0.0
+        next_fpr = 0.0
+        for i in range(len(thresholds)):
+            if fpr[i] > FAR_target:
+                assert fpr[i-1] <= FAR_target
+                optimal_tresh = thresholds[i-1]
+                achived_fpr = fpr[i-1]
+                next_fpr = fpr[i]
+                break
         
-    # Acc = TP + TN / total
-    total = y_true.shape[0]
-    predicted = y_score>=optimal_tresh
-    true_predicted = predicted.eq(y_true).sum()
-    acc = true_predicted / total
+        # Acc = TP + TN / total
+        predicted = y_score>=optimal_tresh
+        true_predicted = predicted.eq(y_true).sum()
+        acc = true_predicted / total
+        accs.append(acc)
+
+        print(f"{inspect.stack()[2][3]}\tFAR: {FAR_target}, Accuracy: {acc:.5f} at tresh:{optimal_tresh:.5f} and fpr: {achived_fpr:.5f}, (prev: {next_fpr:.5f})")
+        
+        
 
     # Generate a curve for accuracy VS FPR
     # Will be as long as fpr, and tresholds
@@ -225,8 +245,7 @@ def generate_veritication_rate(y_true, y_score, FAR_target=0.001): # TODO 0.001
         g_true_predicted = predicted.eq(y_true).sum()  # Both TP and TN
         accuracies.append(g_true_predicted/total)
 
-    print(f"Accuracy: {acc:.5f} at tresh:{optimal_tresh:.5f} and fpr: {achived_fpr:.5f}, (prev: {next_fpr:.5f})")
-    return acc, accuracies, fpr # , optimal_tresh, achived_fpr, next_fpr
+    return accs, accuracies, fpr # , optimal_tresh, achived_fpr, next_fpr
 
 
 def bu3dfe_generate_roc(descriptor_dict, siam, device):
@@ -247,14 +266,20 @@ def bu3dfe_generate_roc(descriptor_dict, siam, device):
     # N vs ALL
     y_true_all, y_score_all  = metrics.generate_metric_siamese_roc_bal(siam, device, gallery_dict, probe_dict)
 
-    y_trues = [y_true_low, y_true_high, y_true_all]
-    y_scores = [y_score_low, y_score_high, y_score_all]
-    labels = ["Neutral vs. Low-Intensity", "Neutral vs. High-Intensity", "Neutral vs. All"]
+    # All vs All
+    y_true_all_v_all, y_score_all_v_all = metrics.generate_metric_siamese_roc_bal_all(siam, device, descriptor_dict)
 
-    verification_rate, accuracies, fpr = generate_veritication_rate(y_true_all, y_score_all)
-    
+    y_trues = [y_true_low, y_true_high, y_true_all, y_true_all_v_all]
+    y_scores = [y_score_low, y_score_high, y_score_all, y_score_all_v_all]
+    labels = ["Neutral vs. Low-Intensity", "Neutral vs. High-Intensity", "Neutral vs. All", "All vs. All"]
+
+    verification_rates, accuracies, fprs = generate_verification_rates(y_trues, y_scores)
+    ap = sklearn.metrics.average_precision_score(y_trues[2].cpu(), y_scores[2].cpu())
     fprs, recalls, roc_aucs = generate_roc_aucs(y_trues, y_scores)
-    return generate_roc_from_lists(fprs, recalls, roc_aucs, labels), generate_roc_from_lists(fprs, recalls, roc_aucs, labels, log=True), verification_rate, roc_aucs[2], generate_acc_fpr(fpr, accuracies, "Neutral vs. All") 
+
+    return generate_roc_from_lists(fprs, recalls, roc_aucs, labels), \
+           generate_roc_from_lists(fprs, recalls, roc_aucs, labels, log=True), \
+           verification_rates[2], roc_aucs[2], generate_acc_fpr(fprs, accuracies, labels), ap
 
 def bosphorus_generate_roc(descriptor_dict, siam, device):
     gallery_dict, probe_dict = metrics.split_gallery_set_vs_probe_set_bosphorus(descriptor_dict)
@@ -274,14 +299,21 @@ def bosphorus_generate_roc(descriptor_dict, siam, device):
     # N vs ALL
     y_true_all, y_score_all  = metrics.generate_metric_siamese_roc_bal(siam, device, gallery_dict, probe_dict)
 
-    verification_rate, accuracies, fpr = generate_veritication_rate(y_true_all, y_score_all)
+    # All vs all
+    y_true_all_v_all, y_score_all_v_all = metrics.generate_metric_siamese_roc_bal_all(siam, device, descriptor_dict)
 
-    y_trues = [y_true_low, y_true_high, y_true_all]
-    y_scores = [y_score_low, y_score_high, y_score_all]
-    labels = ["Neutral vs. Neutral", "Neutral vs. Non-neutral", "Neutral vs. All"]
+
+    y_trues = [y_true_low, y_true_high, y_true_all, y_true_all_v_all]
+    y_scores = [y_score_low, y_score_high, y_score_all, y_score_all_v_all]
+    labels = ["Neutral vs. Neutral", "Neutral vs. Non-neutral", "Neutral vs. All", "All vs. All"]
     
+    verification_rates, accuracies, fprs = generate_verification_rates(y_trues, y_scores)
+    ap = sklearn.metrics.average_precision_score(y_trues[2].cpu(), y_scores[2].cpu())
     fprs, recalls, roc_aucs = generate_roc_aucs(y_trues, y_scores)
-    return generate_roc_from_lists(fprs, recalls, roc_aucs, labels), generate_roc_from_lists(fprs, recalls, roc_aucs, labels, log=True), verification_rate, roc_aucs[2], generate_acc_fpr(fpr, accuracies, "Neutral vs. All") 
+
+    return generate_roc_from_lists(fprs, recalls, roc_aucs, labels), \
+           generate_roc_from_lists(fprs, recalls, roc_aucs, labels, log=True), \
+           verification_rates[2], roc_aucs[2], generate_acc_fpr(fprs, accuracies, labels), ap
 
 def frgc_generate_roc(descriptor_dict, siam, device):
     gallery_dict, probe_dict = metrics.split_gallery_set_vs_probe_set_frgc(descriptor_dict)
@@ -292,12 +324,31 @@ def frgc_generate_roc(descriptor_dict, siam, device):
 
     # Cannot filter probe as there is no markings on what type it is 
     y_true_all, y_score_all  = metrics.generate_metric_siamese_roc_bal(siam, device, gallery_dict, probe_dict)
+    y_true_all_v_all, y_score_all_v_all = metrics.generate_metric_siamese_roc_bal_all(siam, device, descriptor_dict)
 
-    verification_rate, accuracies, fpr = generate_veritication_rate(y_true_all, y_score_all)
 
-    y_trues = [y_true_all]
-    y_scores = [y_score_all]
-    labels = ["First vs. Rest"]
+    # verification_rates, accuracies, fpr = generate_veritication_rate(y_true_all, y_score_all)
+    
 
+    y_trues = [y_true_all, y_true_all_v_all]
+    y_scores = [y_score_all, y_score_all_v_all]
+    labels = ["First vs. Rest", "All vs. All"]
+
+    verification_rates, accuracies, fprs = generate_verification_rates(y_trues, y_scores)
+    ap = sklearn.metrics.average_precision_score(y_trues[0].cpu(), y_scores[0].cpu())
     fprs, recalls, roc_aucs = generate_roc_aucs(y_trues, y_scores)
-    return generate_roc_from_lists(fprs, recalls, roc_aucs, labels), generate_roc_from_lists(fprs, recalls, roc_aucs, labels, log=True), verification_rate, roc_aucs[0], generate_acc_fpr(fpr, accuracies, "First vs. All") 
+
+    return generate_roc_from_lists(fprs, recalls, roc_aucs, labels), \
+           generate_roc_from_lists(fprs, recalls, roc_aucs, labels, log=True), \
+           verification_rates[0], roc_aucs[0], generate_acc_fpr(fprs, accuracies, labels), ap
+
+
+def all_v_all_generate_roc(descriptor_dict, siam, device):
+    y_true, y_score = metrics.generate_metric_siamese_roc_bal_all(siam, device, descriptor_dict)
+
+    verification_rates, accuracies, fpr = generate_veritication_rate(y_true, y_score)
+    ap = sklearn.metrics.average_precision_score(y_true.cpu(), y_score.cpu())
+    fprs, recalls, roc_aucs = generate_roc_aucs([y_true], [y_score])
+
+    labels = ["All vs. All"]
+    return None, None, verification_rates, roc_aucs[0], None, ap
