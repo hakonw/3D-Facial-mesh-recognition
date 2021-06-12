@@ -343,6 +343,46 @@ def frgc_generate_roc(descriptor_dict, siam, device):
            verification_rates[0], roc_aucs[0], generate_acc_fpr(fprs, accuracies, labels), ap
 
 
+def face3d_generate_roc(descriptor_dict, siam, device):  # 3dface
+    gallery_dict, probe_dict = metrics.split_gallery_set_vs_probe_set_3dface(descriptor_dict)
+
+    # Assert gallery is correctly layed out
+    for ident, ident_dict in gallery_dict.items():
+        assert len(ident_dict) == 1
+
+    y_true_all, y_score_all  = metrics.generate_metric_siamese_roc_bal(siam, device, gallery_dict, probe_dict)
+    y_true_all_v_all, y_score_all_v_all = metrics.generate_metric_siamese_roc_bal_all(siam, device, descriptor_dict)
+
+    y_trues = [y_true_all, y_true_all_v_all]
+    y_scores = [y_score_all, y_score_all_v_all]
+    labels = ["First vs. Second", "All vs. All"]
+
+    verification_rates, accuracies, fprs = generate_verification_rates(y_trues, y_scores)
+    ap = sklearn.metrics.average_precision_score(y_trues[0].cpu(), y_scores[0].cpu())
+    fprs, recalls, roc_aucs = generate_roc_aucs(y_trues, y_scores)
+
+    return generate_roc_from_lists(fprs, recalls, roc_aucs, labels), \
+           generate_roc_from_lists(fprs, recalls, roc_aucs, labels, log=True), \
+           verification_rates[0], roc_aucs[0], generate_acc_fpr(fprs, accuracies, labels), ap
+
+
+def face3d_generate_cmc(descriptor_dict, siam, device):
+    gallery_dict, probe_dict = metrics.split_gallery_set_vs_probe_set_3dface(descriptor_dict)
+
+    # Assert gallery is correctly layed out
+    for ident, ident_dict in gallery_dict.items():
+        assert len(ident_dict) == 1
+
+
+    rank_tp_dict  = metrics.generate_metirc_siamese_rank1_cmc(siam, device, gallery_dict, probe_dict)
+    ir_by_rank_all = metrics.generate_identification_rate_by_rank(rank_tp_dict)
+
+    ir_ranks = [ir_by_rank_all]
+    labels = ["First vs. Second"]
+    return generate_cmc_from_lists(ir_ranks, labels)
+
+
+
 def all_v_all_generate_roc(descriptor_dict, siam, device):
     y_true, y_score = metrics.generate_metric_siamese_roc_bal_all(siam, device, descriptor_dict)
 

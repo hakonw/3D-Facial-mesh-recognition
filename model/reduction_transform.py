@@ -33,12 +33,13 @@ class SimplifyQuadraticDecimationBruteForce(object):
         data.face = new_data.face
         return data
 
+# Or use TORCH_GEOMETRIC.TRANSFORMS.DELAUNAY
 import torch_geometric.data
 import torch
 from scipy.spatial import Delaunay
 class DelaunayIt(object):
     def __call__(self, data):
-        spatial = Delaunay(points=data.pos[:, 0:2])
+        spatial = Delaunay(points=data.pos[:, 0:2], qhull_options='QJ')
         faces = torch.tensor(spatial.simplices, dtype=torch.long).t().contiguous()
         # pos = data.pos # torch.from_numpy(data).to(torch.float).contiguous()
         # d = torch_geometric.data.Data(pos=pos, face=faces)  # Note Face not Faces

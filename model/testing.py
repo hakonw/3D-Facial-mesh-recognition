@@ -1,5 +1,6 @@
 from os import makedirs, posix_fadvise
 import os.path as osp
+from random import Random
 from sklearn.utils.extmath import log_logistic
 
 import torch
@@ -1323,7 +1324,7 @@ def train8_sia(model, siam, device, dataloader, optimizer, criterion):
         indecies = torch.arange(all.shape[0]).to(device); # print(indecies)
         indecies = torch.combinations(indecies, r=2, with_replacement=True)
         assert indecies.shape[0] == labels_combi.shape[0]
-        indiecies_org = indecies
+        # indiecies_org = indecies
         
         # balance
         # Find indecies for all positive.
@@ -1377,16 +1378,21 @@ def train8_sia(model, siam, device, dataloader, optimizer, criterion):
 import matplotlib.pyplot as plt
 import realEvaluation as evaluation
 import reduction_transform
+from datasetGeneric import ExtraTransform
 def test_8_convnet_triplet():
+    # POST_TRANSFORM = T.Compose([T.FaceToEdge(remove_faces=True), T.NormalizeScale()])
     POST_TRANSFORM = T.Compose([T.FaceToEdge(remove_faces=True), T.NormalizeScale()])
-    # POST_TRANSFORM = T.Compose([T.NormalizeScale(), T.SamplePoints(1024), reduction_transform.DelaunayIt(), T.FaceToEdge(remove_faces=True)])
+    POST_TRANSFORM_Extra = T.Compose([T.RandomTranslate(0.01), T.RandomRotate(5)])
+    # POST_TRANSFORM = T.Compose([T.FaceToEdge(remove_faces=True), T.Center()])
+    # POST_TRANSFORM = T.Compose([T.NormalizeScale(), T.SamplePoints(1024), T.Delaunay(), T.FaceToEdge(remove_faces=True)])
     torch.manual_seed(1)
     torch.cuda.manual_seed(1)
     start_epoch = 1  # re-written if starting from a loaded save
     default_epoch_per_log = 50
+
     
-    valid = ["bu3dfe", "bosp", "frgc", "bosp+frgc"]
-    train_on = "bosp"
+    valid = ["bu3dfe", "bosp", "frgc", "bosp+frgc", "bu3dfe+bosp+frgc"]
+    train_on = "bu3dfe"
     assert train_on in valid
 
     # Global properties
@@ -1396,64 +1402,73 @@ def test_8_convnet_triplet():
     # sample_size = [1024*8, 1024*12]
     sample_size = [1024*2, 1024*6]
 
+    def dload(dataset, batch_size, predicable, num_workers=0):
+       return DataLoader(dataset=dataset, batch_size=batch_size, shuffle=not predicable, num_workers=num_workers, drop_last=not predicable)
+
     import datasetBU3DFEv2
     from datasetGeneric import GenericDataset
     bu3dfe_path = "/lhome/haakowar/Downloads/BU_3DFE"
     bu3dfe_dict =  datasetBU3DFEv2.get_bu3dfe_dict(bu3dfe_path, pickled=pickled, force=force, picke_name="/tmp/Bu3dfe-2048.p", sample="bruteforce", sample_size=1024*2)
     dataset_bu3dfe = GenericDataset(bu3dfe_dict, POST_TRANSFORM)
-    bu3dfe_train_set, bu3dfe_test_set = torch.utils.data.random_split(dataset_bu3dfe, [80, 20])
+    bu3dfe_train_set, bu3dfe_test_set = torch.utils.data.random_split(dataset_bu3dfe, [80, 20], generator=torch.Generator().manual_seed(42))
+    bu3dfe_train_set = ExtraTransform(bu3dfe_train_set, POST_TRANSFORM_Extra)
     # Regular dataloader followed by two test dataloader (seen data, and unseen data)
-    dataloader_bu3dfe_train = DataLoader(dataset=bu3dfe_train_set, batch_size=5, shuffle=False, num_workers=0, drop_last=False)
-    dataloader_bu3dfe_test = DataLoader(dataset=bu3dfe_test_set, batch_size=5, shuffle=False, num_workers=0, drop_last=False)
-    dataloader_bu3dfe_all = DataLoader(dataset=dataset_bu3dfe, batch_size=5, shuffle=False, num_workers=0, drop_last=False)
+    dataloader_bu3dfe_train = dload(bu3dfe_train_set, batch_size=5, predicable=True)
+    dataloader_bu3dfe_test  = dload(bu3dfe_test_set, batch_size=5, predicable=True)
+    dataloader_bu3dfe_all   = dload(dataset_bu3dfe, batch_size=5, predicable=True)
     if train_on == "bu3dfe":
-        dataloader = DataLoader(dataset=bu3dfe_train_set, batch_size=10, shuffle=True, num_workers=0, drop_last=True)
+        dataloader = dload(bu3dfe_train_set, batch_size=10, predicable=False, num_workers=5)
+
 
     import datasetBosphorus
     bosphorus_path = "/lhome/haakowar/Downloads/Bosphorus/BosphorusDB"
     # bosphorus_dict = datasetBosphorus.get_bosphorus_dict("/tmp/invalid", pickled=True)
     # "/tmp/Bosphorus_cache-full-2pass.p"
-    bosphorus_dict = datasetBosphorus.get_bosphorus_dict(bosphorus_path, pickled=pickled, force=force, picke_name="/tmp/Bosphorus-2048-filter.p", sample=sample, sample_size=sample_size)
+    bosphorus_dict = datasetBosphorus.get_bosphorus_dict(bosphorus_path, pickled=pickled, force=force, picke_name="/tmp/Bosphorus-2048-filter-new.p", sample=sample, sample_size=sample_size)
     dataset_bosphorus = GenericDataset(bosphorus_dict, POST_TRANSFORM)
-    bosphorus_train_set, bosphorus_test_set = torch.utils.data.random_split(dataset_bosphorus, [80, 25])
-    dataloader_bosphorus_test = DataLoader(dataset=bosphorus_test_set, batch_size=2, shuffle=False, num_workers=0, drop_last=False)
-    dataloader_bosphorus_train = DataLoader(dataset=bosphorus_train_set, batch_size=2, shuffle=False, num_workers=0, drop_last=False)
-    dataloader_bosphorus_all = DataLoader(dataset=dataset_bosphorus, batch_size=5, shuffle=False, num_workers=0, drop_last=False)
+    bosphorus_train_set, bosphorus_test_set = torch.utils.data.random_split(dataset_bosphorus, [80, 25], generator=torch.Generator().manual_seed(42))
+    bosphorus_train_set = ExtraTransform(bosphorus_train_set, POST_TRANSFORM_Extra)
+    dataloader_bosphorus_test  = dload(bosphorus_test_set, batch_size=2, predicable=True)
+    dataloader_bosphorus_train = dload(bosphorus_train_set, batch_size=2, predicable=True)
+    dataloader_bosphorus_all   = dload(dataset_bosphorus, batch_size=5, predicable=True)
     if train_on == "bosp":
-        dataloader = DataLoader(dataset=bosphorus_train_set, batch_size=4, shuffle=True, num_workers=0, drop_last=True)
+        dataloader = dload(bosphorus_train_set, batch_size=4, predicable=False)
 
     from datasetFRGC import get_frgc_dict
     frgc_path = "/lhome/haakowar/Downloads/FRGCv2/Data/"
-    dataset_frgc_fall_2003 = get_frgc_dict(frgc_path + "Fall2003range", pickled=pickled, force=force, picke_name="/tmp/FRGCv2-fall2003_cache-2048.p", sample=sample, sample_size=sample_size)
-    dataset_frgc_spring_2003 = get_frgc_dict(frgc_path + "Spring2003range", pickled=pickled, force=force, picke_name="/tmp/FRGCv2-spring2003_cache-2048.p", sample=sample, sample_size=sample_size)
-    dataset_frgc_spring_2004 = get_frgc_dict(frgc_path + "Spring2004range", pickled=pickled, force=force, picke_name="/tmp/FRGCv2-spring2004_cache-2048.p", sample=sample, sample_size=sample_size)
+    dataset_frgc_fall_2003 = get_frgc_dict(frgc_path + "Fall2003range", pickled=pickled, force=force, picke_name="/tmp/FRGCv2-fall2003_cache-2048-new.p", sample=sample, sample_size=sample_size)
+    dataset_frgc_spring_2003 = get_frgc_dict(frgc_path + "Spring2003range", pickled=pickled, force=force, picke_name="/tmp/FRGCv2-spring2003_cache-2048-new.p", sample=sample, sample_size=sample_size)
+    dataset_frgc_spring_2004 = get_frgc_dict(frgc_path + "Spring2004range", pickled=pickled, force=force, picke_name="/tmp/FRGCv2-spring2004_cache-2048-new.p", sample=sample, sample_size=sample_size)
     dataset_frgc_fall_2003 = GenericDataset(dataset_frgc_fall_2003, POST_TRANSFORM)
     dataset_frgc_spring_2003 = GenericDataset(dataset_frgc_spring_2003, POST_TRANSFORM)
     dataset_frgc_spring_2004 = GenericDataset(dataset_frgc_spring_2004, POST_TRANSFORM)
     dataset_frgc_train = torch.utils.data.ConcatDataset([dataset_frgc_spring_2003])  # As per doc, Spring2003 is train, rest is val
     dataset_frgc_test = torch.utils.data.ConcatDataset([dataset_frgc_fall_2003, dataset_frgc_spring_2004])  # As per doc, Spring2003 is train, rest is val
-    dataloader_frgc_train = DataLoader(dataset=dataset_frgc_train, batch_size=2, shuffle=False, num_workers=0, drop_last=False)
-    dataloader_frgc_test = DataLoader(dataset=dataset_frgc_test, batch_size=2, shuffle=False, num_workers=0, drop_last=False)
+    dataloader_frgc_train = dload(dataset_frgc_train, batch_size=2, predicable=True)
+    dataloader_frgc_test = dload(dataset_frgc_test, batch_size=2, predicable=True)
     dataset_frgc_all = torch.utils.data.ConcatDataset([dataset_frgc_fall_2003, dataset_frgc_spring_2003, dataset_frgc_spring_2004])
-    dataloader_frgc_all = DataLoader(dataset=dataset_frgc_all, batch_size=5, shuffle=False, num_workers=0, drop_last=False)
+    dataloader_frgc_all = dload(dataset_frgc_all, batch_size=5, predicable=True)
     if train_on == "frgc":
-        dataloader = DataLoader(dataset=dataset_frgc_train, batch_size=5, shuffle=True, num_workers=0, drop_last=True)
+        dataloader = dload(dataset_frgc_train, batch_size=20, predicable=False)
 
     from dataset3DFace import get_3dface_dict
     d3face_path = "/lhome/haakowar/Downloads/3DFace_DB/3DFace_DB/"
     d3face_dict = get_3dface_dict(d3face_path, pickled=pickled, force=force, picke_name="/tmp/3dface-12k.p", sample="all", sample_size=4096*3)
     d3face_dataset_all = GenericDataset(d3face_dict, POST_TRANSFORM)
-    dataloader_3dface_all = DataLoader(dataset=d3face_dataset_all, batch_size=5, shuffle=False, num_workers=0, drop_last=False)
+    dataloader_3dface_all = dload(d3face_dataset_all, batch_size=5, predicable=True)
 
 
-    def dload(dataset, batch_size, predicable):
-        return DataLoader(dataset=dataset, batch_size=batch_size, shuffle=not predicable, num_workers=0, drop_last=not predicable)
+
     # Combination:
     # Trained on BOSP + FRGC, 
     if train_on == "bosp+frgc":
         dataset_frgc_bosp_train = torch.utils.data.ConcatDataset([bosphorus_train_set, dataset_frgc_train])
-        dataloader = dload(dataset_frgc_bosp_train, 10, False)
+        dataloader = dload(dataset_frgc_bosp_train, batch_size=10, predicable=False)
         # TODO combine val data?
+    
+    if train_on == "bu3dfe+bosp+frgc":
+        dataset_bu3dfe_frgc_bosp_train = torch.utils.data.ConcatDataset([bu3dfe_train_set, bosphorus_train_set, dataset_frgc_train])
+        dataloader = dload(dataset_bu3dfe_frgc_bosp_train, batch_size=5, predicable=False)
 
     # Load the model
     assert torch.cuda.is_available()
@@ -1467,7 +1482,7 @@ def test_8_convnet_triplet():
 
     LOG = ask_for_writer(dataloader, optimizer)
     print(f"dataloader_batch: {dataloader.batch_size}, optimizer: {optimizer.state_dict()['param_groups'][0]['lr']}")
-    for epoch in range(start_epoch, 5005):
+    for epoch in range(start_epoch, 6005):
         model.train()
         siam.train()
         losses, correct, correct_pos_pair, correct_neg_pair = train8_sia(model, siam, device, dataloader, optimizer, criterion)
@@ -1565,6 +1580,8 @@ def test_8_convnet_triplet():
                 if "frgc" in dataset_name:
                     # if train_on != "frgc": assert len(gallery_dict) == 466
                     genrate_cmc_and_roc(evaluation.frgc_generate_cmc, evaluation.frgc_generate_roc)
+                if "3dface" in dataset_name:
+                    genrate_cmc_and_roc(evaluation.face3d_generate_cmc, evaluation.face3d_generate_roc)
 
 
             if epoch % default_epoch_per_log == 0:
@@ -1599,10 +1616,10 @@ def test_8_convnet_triplet():
                     generate_log_block("frgc", "all", dataloader_frgc_all, metrics.split_gallery_set_vs_probe_set_frgc)
 
 
-            # if epoch % default_epoch_per_log == 0:
-            #     model.eval(); siam.eval(); torch.cuda.empty_cache()
-            #     print("Testing on 3dface    ", end="\r")
-            #     generate_log_block("3dface", "all", dataloader_3dface_all, metrics.split_gallery_set_vs_probe_set_3dface)
+            if epoch % default_epoch_per_log == 0:
+                model.eval(); siam.eval(); torch.cuda.empty_cache()
+                print("Testing on 3dface    ", end="\r")
+                generate_log_block("3dface", "all", dataloader_3dface_all, metrics.split_gallery_set_vs_probe_set_3dface)
 
 
             if sum(len(section) for section in toprint) > 0:
@@ -1615,8 +1632,10 @@ def test_8_convnet_triplet():
         
         if epoch % 500 == 0 and type(LOG).__name__ != "Dummy":
             name = f"{logging_dir}/{logging_name}/model-{epoch}.pt"
+            name_siam = f"{logging_dir}/{logging_name}/model-siam-{epoch}.pt"
             print(f"Saving {name}")
             torch.save(model.state_dict(), name)
+            torch.save(siam.state_dict(), name_siam)
 
 import os
 logging_dir = "logging-siamese-1905-namechange-trash"

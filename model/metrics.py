@@ -9,33 +9,33 @@ import onlineTripletLoss
 # Processing of data before metrics
 #
 
-import setup
+# # import setup
 
-@torch.no_grad()  # This function disables autograd, so no training can be done on the data
-def single_data_to_descriptor(model, device, data):
-    data = setup.Datasets.POST_TRANSFORM(data)
-    data.to(device)
-    # Assuming single data, ergo dont need to do .to_data_list()
-    descriptor = model(data)
-    descriptor.to("cpu")  # Results are returned to the cpu
-    return descriptor
+# @torch.no_grad()  # This function disables autograd, so no training can be done on the data
+# def single_data_to_descriptor(model, device, data):
+#     data = setup.Datasets.POST_TRANSFORM(data)
+#     data.to(device)
+#     # Assuming single data, ergo dont need to do .to_data_list()
+#     descriptor = model(data)
+#     descriptor.to("cpu")  # Results are returned to the cpu
+#     return descriptor
 
 
-# Assumes dict: ID -> name -> Data
-# : dict[str, dict[str, [Data]]
-def data_dict_to_descriptor_dict(model, device, data_dict, desc="Evaluation", leave_tqdm=True):
-    descriptor_dict = {}
-    model.eval()
+# # Assumes dict: ID -> name -> Data
+# # : dict[str, dict[str, [Data]]
+# def data_dict_to_descriptor_dict(model, device, data_dict, desc="Evaluation", leave_tqdm=True):
+#     descriptor_dict = {}
+#     model.eval()
 
-    for key, data_list in tqdm(data_dict.items(), desc=desc, leave=leave_tqdm):
-        assert isinstance(data_list, dict)
-        desc_dict = {}
-        for name, data in data_list.items():  # Keep the file metatadata if needed later
-            desc_dict[name] = single_data_to_descriptor(model, device, data.clone())
+#     for key, data_list in tqdm(data_dict.items(), desc=desc, leave=leave_tqdm):
+#         assert isinstance(data_list, dict)
+#         desc_dict = {}
+#         for name, data in data_list.items():  # Keep the file metatadata if needed later
+#             desc_dict[name] = single_data_to_descriptor(model, device, data.clone())
 
-        descriptor_dict[key] = desc_dict
-    model.train()
-    return descriptor_dict
+#         descriptor_dict[key] = desc_dict
+#     model.train()
+#     return descriptor_dict
 
 
 #
