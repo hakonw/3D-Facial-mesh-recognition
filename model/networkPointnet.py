@@ -60,7 +60,7 @@ class Net(torch.nn.Module):
         torch.manual_seed(1)
 
         self.sa1_module = SAModule(ratio=0.5, r=0.2, nn=MLP([3, 64, 64, 128]))
-        self.sa2_module = SAModule(ratio=0.25, r=2, nn=MLP([128 + 3, 128, 128, 256]))
+        self.sa2_module = SAModule(ratio=0.25, r=0.4, nn=MLP([128 + 3, 128, 128, 256]))
         self.sa3_module = GlobalSAModule(MLP([256 + 3, 256, 512, 1024]))
 
         self.lin1 = Lin(1024, 512)

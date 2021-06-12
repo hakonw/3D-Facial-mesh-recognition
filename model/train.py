@@ -47,6 +47,7 @@ def train(cfg: Config):
     print("Loading criterion and optimizer")
     criterion = torch.nn.TripletMarginLoss(margin=cfg.MARGIN, p=cfg.P, reduction=cfg.REDUCTION)  # https://pytorch.org/docs/stable/generated/torch.nn.TripletMarginLoss.html#torch.nn.TripletMarginLoss   mean or sum reduction possible
     optimizer = torch.optim.SGD(model.parameters(), lr=cfg.LR)
+    # optimizer = torch.optim.Adam(model.parameters(), lr=cfg.LR)
 
     print("Loading DataLoader")
     # Note custom collate fn
@@ -62,6 +63,7 @@ def train(cfg: Config):
 
         losses = []
         dist_a_ps = []
+        dist_a_ns = []
         for i_batch, batch in tq:
             optimizer.zero_grad()
 
@@ -105,12 +107,12 @@ def train(cfg: Config):
             # # # # # # # # # # # # # # # # # # # # # # # # # # #
             # Første id: anchor og pos
             # Alle andre: Negative
-            negs = []
-            for i in range(1, len(descritors)):
-                for m in descritors[i]:
-                    negs.append(m)
-            anc = descritors[0][1].unsqueeze(0).expand(len(negs), -1)
-            pos = descritors[0][0].unsqueeze(0).expand(len(negs), -1)
+            # negs = []
+            # for i in range(1, len(descritors)):
+            #     for m in descritors[i]:
+            #         negs.append(m)
+            # anc = descritors[0][1].unsqueeze(0).expand(len(negs), -1)
+            # pos = descritors[0][0].unsqueeze(0).expand(len(negs), -1)
             # negs = torch.stack(negs)
             # loss = criterion(anc, pos, negs) #  + max(torch.dist(anc[0], pos[0], p=2), 1) - 1
 
@@ -140,16 +142,19 @@ def train(cfg: Config):
             # Per iteration writing and tdqm update
             iter += 1
             losses.append(loss.item())
-            dist_a_ps.append(torch.dist(anc[0].to("cpu"), all[0].to("cpu"), p=2).item())
+            dist_a_ps.append(torch.dist(descritors[0][0].to("cpu"), descritors[0][1].to("cpu"), p=2).item())
+            dist_a_ns.append(torch.dist(descritors[0][0].to("cpu"), descritors[1][0].to("cpu"), p=2).item())
             if writer is not None:
                 writer.add_scalar('Loss/train', loss.item(), iter)
                 writer.add_scalar('Loss/avg_dist_a_p', dist_a_ps[-1], iter)
+                writer.add_scalar('Loss/avg_dist_a_n', dist_a_ns[-1], iter)
                 #writer.add_scalar('Pairs/train', len(anchors), iter)
             if iter % 3 == 0:  # var 5
                 with torch.no_grad():
                     tq.set_postfix(
                         avg_loss=sum(losses)/max(len(losses), 1),
-                        dist_a_p=sum(dist_a_ps)/max(len(dist_a_ps), 1)
+                        dist_a_p=sum(dist_a_ps)/max(len(dist_a_ps), 1),
+                        dist_a_n=sum(dist_a_ns)/max(len(dist_a_ns), 1),
                         #, fraction=fraction_positive_triplets.item()
                       )
 

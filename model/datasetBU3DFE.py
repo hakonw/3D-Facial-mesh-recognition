@@ -137,6 +137,7 @@ class BU3DFEDataset(Dataset):  # This does not need to be of type Dataset
         for name, d in safe_dict.items():
             d.id = idx
             d.name = name
+            d.dataset_id = self.dataset_keys[idx]
             out.append(d)
         return out
 

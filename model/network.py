@@ -411,7 +411,7 @@ class TestNet3(torch.nn.Module):
         def conv_bn_relu(inn, out):
             output = []
             output.append(("conv", conv(in_channels=inn, out_channels=out)))
-            # output.append(("x", bnorm(in_channels=out)))
+            output.append(("x", bnorm(in_channels=out)))
             output.append(("x", activation))
             return output
 
@@ -443,17 +443,19 @@ class TestNet3(torch.nn.Module):
         # NOT AS IN THE PAPER
         self.layers.append(("x", nn.Flatten(start_dim=0)))   # Special start dim as it is not yet batched
         self.layers.append(("x", nn.Linear(2048, 512)))
-        # self.layers.append(("x", nn.BatchNorm1d(512)))
+        self.layers.append(("x", nn.BatchNorm1d(512)))
         self.layers.append(("x", activation))
 
         # Output
         self.layers.append(("x", nn.Linear(512, 4096)))
-        # self.layers.append(("x", nn.BatchNorm1d(4096)))
+        self.layers.append(("x", nn.BatchNorm1d(4096)))
 
         self.inputs = [x[0] for x in self.layers]
         self.layers = nn.ModuleList([x[1] for x in self.layers])
 
     def forward(self, data):
+        if isinstance(data, Batch):
+            batch = data.batch
         pos, edge_index = data.pos, data.edge_index
         x = pos
 
@@ -462,7 +464,8 @@ class TestNet3(torch.nn.Module):
                 x = layer(x)
             if input == "conv":
                 x = layer(x, edge_index)
-
+            if input == "pool-batch":
+                x = layer(x, edge_index, batch=batch)
         return x
 
     def short_rep(self):
