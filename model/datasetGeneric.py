@@ -1,3 +1,4 @@
+from torch.utils import data
 from torch_geometric.data import Dataset
 import random
 import numpy as np
@@ -47,8 +48,21 @@ import torch.utils.data.dataloader
 import utils
 class DataLoader(torch.utils.data.DataLoader):
     def __init__(self, dataset, batch_size=1, shuffle=False, **kwargs):
-
         if "collate_fn" in kwargs:
             del kwargs["collate_fn"]
 
         super(DataLoader, self).__init__(dataset, batch_size, shuffle, collate_fn=utils.list_collate_fn, **kwargs)
+
+class ExtraTransform(Dataset):
+    def __init__(self, subset, transform=None):
+        self.subset = subset
+        self.transform = transform
+
+    def __getitem__(self, index):
+        d = self.subset[index]
+        if self.transform:
+            d = self.transform(d)
+        return d
+        
+    def __len__(self):
+        return len(self.subset)
