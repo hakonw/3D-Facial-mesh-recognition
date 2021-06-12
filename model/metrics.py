@@ -3,7 +3,7 @@ from torch_geometric.data import Data
 import torch_geometric.utils
 import torch
 from tqdm import tqdm
-import onlineTripletLoss
+import tripletloss.onlineTripletLoss as onlineTripletLoss
 
 #
 # Processing of data before metrics

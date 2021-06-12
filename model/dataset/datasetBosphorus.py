@@ -2,7 +2,8 @@ import os.path
 from glob import glob
 import pickle
 from tqdm import tqdm
-import read_bnt
+from io.read_bnt import read_bnt_raw
+import io.sampler as sampler
 
 
 # global_relevant = lambda name: "_N_N_" in name or "_E_" in name
@@ -33,11 +34,11 @@ def generate_bosphorus_dict(root, filtered=True, filter=global_relevant, sample=
             if filtered and not filter(basename):
                 continue
 
-            data_raw = read_bnt.read_bnt_raw(file_path)
-            if sample == "2pass": data_sampled = read_bnt.data_2pass_sample(data_raw, sample_size[0], sample_size[1])
-            elif sample == "bruteforce": data_sampled = read_bnt.data_bruteforce_sample(data_raw)
-            elif sample == "random": data_sampled = read_bnt.data_simple_sample(data_raw, sample_size)
-            elif sample == "all": data_sampled = read_bnt.data_all_sample(data_raw)
+            data_raw = read_bnt_raw(file_path)
+            if sample == "2pass": data_sampled = sampler.data_2pass_sample(data_raw, sample_size[0], sample_size[1])
+            elif sample == "bruteforce": data_sampled = sampler.data_bruteforce_sample(data_raw)
+            elif sample == "random": data_sampled = sampler.data_simple_sample(data_raw, sample_size)
+            elif sample == "all": data_sampled = sampler.data_all_sample(data_raw)
             else: raise ValueError("Invalid argument", sample)
             identity_data[basename] = data_sampled
             # identity_data[basename] = data_raw

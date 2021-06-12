@@ -3,7 +3,6 @@ from glob import glob
 import pickle
 from tqdm import tqdm
 from read_wrl import read_wrl
-import read_bnt
 import torch_geometric.utils
 import reduction_transform
 

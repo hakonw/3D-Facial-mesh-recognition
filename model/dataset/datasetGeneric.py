@@ -46,6 +46,9 @@ class GenericDataset(Dataset):
 
 import torch.utils.data.dataloader
 import utils
+# Currently, pytorch_geometric overwrites the collate_fn
+# https://github.com/rusty1s/pytorch_geometric/blob/3e8baf28c86eebbf6da74be36ea3904ec77480b8/torch_geometric/data/dataloader.py#L57
+# So that's a thing
 class DataLoader(torch.utils.data.DataLoader):
     def __init__(self, dataset, batch_size=1, shuffle=False, **kwargs):
         if "collate_fn" in kwargs:

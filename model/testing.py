@@ -1,15 +1,14 @@
 from os import makedirs, posix_fadvise
 import os.path as osp
 from random import Random
-from sklearn.utils.extmath import log_logistic
 
 import torch
 import torch.nn.functional as F
 from torch.nn import Sequential as Seq, Linear, Linear as Lin, ReLU, BatchNorm1d as BN
 from torch_geometric.datasets import ModelNet
 import torch_geometric.transforms as T
-#from torch_geometric.data import DataLoader
-from datasetGeneric import DataLoader
+#from torch_geometric.data import DataLoader  # Instead of this, use modified dataloader to not throw away data 
+from dataset.datasetGeneric import DataLoader
 from torch_geometric.nn import PointConv, fps, radius, global_max_pool
 
 from torch_geometric.data.batch import Batch
@@ -164,7 +163,7 @@ def test_1_regular_poitnet():
 
 # Test 2 - poitnet++ with triplet loss
 import torch_geometric.data.batch as geometric_batch
-import onlineTripletLoss
+import tripletloss.onlineTripletLoss as onlineTripletLoss
 import metrics
 def train2(epoch, model, device, dataloader, optimizer, margin, criterion):
     model.train()
@@ -775,7 +774,7 @@ def train5(epoch, model, device, dataloader, optimizer, margin, criterion):
         return losses, dist_a_p, dist_a_n
     return losses, dist_a_p, dist_a_n, lengths, max_losses, max_dist_a_ps, min_dist_a_ns
 
-import datasetBU3DFE
+import dataset.datasetBU3DFE as datasetBU3DFE
 import math
 def test_5_convnet_triplet():
     POST_TRANSFORM = T.Compose([T.FaceToEdge(remove_faces=True), T.NormalizeScale()])
@@ -810,8 +809,8 @@ def test_5_convnet_triplet():
     dataloader_bu3dfe_all = DataLoader(dataset=dataset_bu3dfe, batch_size=2, shuffle=False, num_workers=0, drop_last=False)
     #dataloader = dataloader_bu3dfe
 
-    import datasetBosphorus
-    from datasetGeneric import GenericDataset
+    import dataset.datasetBosphorus as datasetBosphorus
+    from dataset.datasetGeneric import GenericDataset
     bosphorus_path = "/lhome/haakowar/Downloads/Bosphorus/BosphorusDB"
     # bosphorus_dict = datasetBosphorus.get_bosphorus_dict("/tmp/invalid", pickled=True)
     bosphorus_dict = datasetBosphorus.get_bosphorus_dict(bosphorus_path, pickled=True, force=False, picke_name="/tmp/Bosphorus_cache-full-2pass.p")
@@ -822,7 +821,7 @@ def test_5_convnet_triplet():
     dataloader_bosphorus_all = DataLoader(dataset=dataset_bosphorus, batch_size=2, shuffle=False, num_workers=0, drop_last=False)
     # dataloader = DataLoader(dataset=bosphorus_train_set, batch_size=4, shuffle=True, num_workers=0, drop_last=True)
 
-    from datasetFRGC import get_frgc_dict
+    from dataset.datasetFRGC import get_frgc_dict
     frgc_path = "/lhome/haakowar/Downloads/FRGCv2/Data/"
     dataset_frgc_fall_2003 = get_frgc_dict(frgc_path + "Fall2003range", pickled=True,force=False, picke_name="FRGCv2-fall2003_cache.p")
     dataset_frgc_spring_2003 = get_frgc_dict(frgc_path + "Spring2003range", pickled=True, force=False, picke_name="FRGCv2-spring2003_cache.p")
@@ -1188,8 +1187,8 @@ def test_7_softmax_embeddings2():
     dataloader_bu3dfe_all = DataLoader(dataset=dataset, batch_size=2, shuffle=False, num_workers=0, drop_last=False)
     #dataloader = dataloader_bu3dfe
 
-    import datasetBosphorus
-    from datasetGeneric import GenericDataset
+    import dataset.datasetBosphorus as datasetBosphorus
+    from dataset.datasetGeneric import GenericDataset
     bosphorus_path = "/lhome/haakowar/Downloads/Bosphorus/BosphorusDB"
     # bosphorus_dict = datasetBosphorus.get_bosphorus_dict("/tmp/invalid", pickled=True)
     bosphorus_dict = datasetBosphorus.get_bosphorus_dict(bosphorus_path, pickled=False, force=False, picke_name="/tmp/Bosphorus_cache-full-2pass-1000.p")
@@ -1376,13 +1375,13 @@ def train8_sia(model, siam, device, dataloader, optimizer, criterion):
 
 # import matplotlib.pyplot as plt
 import matplotlib.pyplot as plt
-import realEvaluation as evaluation
+import evaluation.realEvaluation as evaluation
 import reduction_transform
-from datasetGeneric import ExtraTransform
+from dataset.datasetGeneric import ExtraTransform
 def test_8_convnet_triplet():
     # POST_TRANSFORM = T.Compose([T.FaceToEdge(remove_faces=True), T.NormalizeScale()])
     POST_TRANSFORM = T.Compose([T.FaceToEdge(remove_faces=True), T.NormalizeScale()])
-    POST_TRANSFORM_Extra = T.Compose([T.RandomTranslate(0.01), T.RandomRotate(5)])
+    POST_TRANSFORM_Extra = T.Compose([T.RandomTranslate(0.01), T.RandomRotate(5, axis=0), T.RandomRotate(5, axis=1), T.RandomRotate(5, axis=2)])
     # POST_TRANSFORM = T.Compose([T.FaceToEdge(remove_faces=True), T.Center()])
     # POST_TRANSFORM = T.Compose([T.NormalizeScale(), T.SamplePoints(1024), T.Delaunay(), T.FaceToEdge(remove_faces=True)])
     torch.manual_seed(1)
@@ -1402,11 +1401,14 @@ def test_8_convnet_triplet():
     # sample_size = [1024*8, 1024*12]
     sample_size = [1024*2, 1024*6]
 
+    # for the dataloader. As it is in memory, a high number is not needed, set to 0 if file desc errors https://pytorch.org/docs/stable/data.html
+    # Alt,  check out   lsof | awk '{ print $2; }' | uniq -c | sort -rn | head
+    # and               ulimit -n 4096
     def dload(dataset, batch_size, predicable, num_workers=0):
        return DataLoader(dataset=dataset, batch_size=batch_size, shuffle=not predicable, num_workers=num_workers, drop_last=not predicable)
 
-    import datasetBU3DFEv2
-    from datasetGeneric import GenericDataset
+    import dataset.datasetBU3DFEv2 as datasetBU3DFEv2
+    from dataset.datasetGeneric import GenericDataset
     bu3dfe_path = "/lhome/haakowar/Downloads/BU_3DFE"
     bu3dfe_dict =  datasetBU3DFEv2.get_bu3dfe_dict(bu3dfe_path, pickled=pickled, force=force, picke_name="/tmp/Bu3dfe-2048.p", sample="bruteforce", sample_size=1024*2)
     dataset_bu3dfe = GenericDataset(bu3dfe_dict, POST_TRANSFORM)
@@ -1420,7 +1422,7 @@ def test_8_convnet_triplet():
         dataloader = dload(bu3dfe_train_set, batch_size=10, predicable=False, num_workers=5)
 
 
-    import datasetBosphorus
+    import dataset.datasetBosphorus as datasetBosphorus
     bosphorus_path = "/lhome/haakowar/Downloads/Bosphorus/BosphorusDB"
     # bosphorus_dict = datasetBosphorus.get_bosphorus_dict("/tmp/invalid", pickled=True)
     # "/tmp/Bosphorus_cache-full-2pass.p"
@@ -1434,7 +1436,7 @@ def test_8_convnet_triplet():
     if train_on == "bosp":
         dataloader = dload(bosphorus_train_set, batch_size=4, predicable=False)
 
-    from datasetFRGC import get_frgc_dict
+    from dataset.datasetFRGC import get_frgc_dict
     frgc_path = "/lhome/haakowar/Downloads/FRGCv2/Data/"
     dataset_frgc_fall_2003 = get_frgc_dict(frgc_path + "Fall2003range", pickled=pickled, force=force, picke_name="/tmp/FRGCv2-fall2003_cache-2048-new.p", sample=sample, sample_size=sample_size)
     dataset_frgc_spring_2003 = get_frgc_dict(frgc_path + "Spring2003range", pickled=pickled, force=force, picke_name="/tmp/FRGCv2-spring2003_cache-2048-new.p", sample=sample, sample_size=sample_size)
@@ -1451,7 +1453,7 @@ def test_8_convnet_triplet():
     if train_on == "frgc":
         dataloader = dload(dataset_frgc_train, batch_size=20, predicable=False)
 
-    from dataset3DFace import get_3dface_dict
+    from dataset.dataset3DFace import get_3dface_dict
     d3face_path = "/lhome/haakowar/Downloads/3DFace_DB/3DFace_DB/"
     d3face_dict = get_3dface_dict(d3face_path, pickled=pickled, force=force, picke_name="/tmp/3dface-12k.p", sample="all", sample_size=4096*3)
     d3face_dataset_all = GenericDataset(d3face_dict, POST_TRANSFORM)

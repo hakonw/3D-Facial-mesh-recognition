@@ -2,8 +2,8 @@ import os.path
 from glob import glob
 import pickle
 from tqdm import tqdm
-import read_bnt  # For sampling algos
-import read_abs
+import sampler
+from io.read_abs import read_abs_raw_gzip
 
 def global_relevant(name): return True
 
@@ -33,11 +33,11 @@ def generate_frgc_dict(root, filtered=True, filter=global_relevant, sample="brut
         if filtered and not filter(basename):
             continue
             
-        data_raw = read_abs.read_abs_raw_gzip(file_path)
-        if sample == "2pass": data_sampled = read_bnt.data_2pass_sample(data_raw, sample_size[0], sample_size[1])
-        elif sample == "bruteforce": data_sampled = read_bnt.data_bruteforce_sample(data_raw)
-        elif sample == "random": data_sampled = read_bnt.data_simple_sample(data_raw, sample_size)
-        elif sample == "all": data_sampled = read_bnt.data_all_sample(data_raw)
+        data_raw = read_abs_raw_gzip(file_path)
+        if sample == "2pass": data_sampled = sampler.data_2pass_sample(data_raw, sample_size[0], sample_size[1])
+        elif sample == "bruteforce": data_sampled = sampler.data_bruteforce_sample(data_raw)
+        elif sample == "random": data_sampled = sampler.data_simple_sample(data_raw, sample_size)
+        elif sample == "all": data_sampled = sampler.data_all_sample(data_raw)
         else: raise ValueError("Invalid argument", sample)
         # identity_data[basename] = data_raw
 

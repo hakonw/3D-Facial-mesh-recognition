@@ -14,7 +14,7 @@ from torch_geometric.data.data import Data
 from torch_scatter import scatter
 from torch_geometric.nn import GCNConv, BatchNorm, TopKPooling
 # import torch_geometric.data.batch as geometric_batch
-import onlineTripletLoss
+import tripletloss.onlineTripletLoss as onlineTripletLoss
 import metrics
 class TestNet55_desc(torch.nn.Module):
     def __init__(self):
@@ -188,7 +188,7 @@ def train5(epoch, model, device, dataloader, optimizer, margin, criterion):
         return losses, dist_a_p, dist_a_n
     return losses, dist_a_p, dist_a_n, lengths, max_losses, max_dist_a_ps, min_dist_a_ns
 
-import datasetBU3DFE
+import dataset.datasetBU3DFE as datasetBU3DFE
 import math
 def test_5_convnet_triplet():
     import reduction_transform
