@@ -1508,7 +1508,7 @@ def test_8_convnet_triplet():
             #     LOG.add_graph(model, [(single_data.pos, single_data.edge_index)])
             
             pr_curve_samples = 1023
-            toprint = [[],[],[]]  # 3 types of metrics ergo 3 buckets
+            toprint = [[],[],[]]  # 3 types of metrics ergo 3 buckets (descriptor rank1, siamese verification, siamese rank1)
 
             def savefig(fig, dir, name):
                 if type(LOG).__name__ != "Dummy":
