@@ -1,5 +1,5 @@
 import torch
-import meshfr.tripletloss.onlineTripletLoss as onlineTripletLoss
+# import meshfr.tripletloss.onlineTripletLoss as onlineTripletLoss
 
 #
 # Processing of data before metrics
@@ -55,6 +55,8 @@ class BaseMetric:
         return cls(**dataclasses.asdict(instance))
 
 
+# NOTE: ACCURACY, PRECISIION AND ALL ARE WRONG AND SHOULD ONLY BE USED TO EVALUATE TRAINING AND NOT TESTING
+# THEY ARE WRONG BUT CAN STILL BE USED RELATIVELY
 @dataclass
 class ScoreMetric(BaseMetric):
     accuracy: float = None
@@ -114,80 +116,80 @@ def generate_score_metric_from_base(base_metric: BaseMetric):
 #
 
 
-def compare_two_unique_desc_lists(margin: float, desc_list1, desc_list2):
-    # for i in range(min(len(desc_list1), len(desc_list2))):  # Assert torch.all, torch.eq isnt working, doing it manually
-    #     assert not torch.all(torch.eq(desc_list1[i], desc_list2[i]))
-    within_margin = 0
-    outside_margin = 0
-    for desc1 in desc_list1:
-        for desc2 in desc_list2:
-            d = distance(desc1, desc2)
-            if d < margin:
-                within_margin += 1
-            else:
-                outside_margin += 1
-    return within_margin, outside_margin
+# def compare_two_unique_desc_lists(margin: float, desc_list1, desc_list2):
+#     # for i in range(min(len(desc_list1), len(desc_list2))):  # Assert torch.all, torch.eq isnt working, doing it manually
+#     #     assert not torch.all(torch.eq(desc_list1[i], desc_list2[i]))
+#     within_margin = 0
+#     outside_margin = 0
+#     for desc1 in desc_list1:
+#         for desc2 in desc_list2:
+#             d = distance(desc1, desc2)
+#             if d < margin:
+#                 within_margin += 1
+#             else:
+#                 outside_margin += 1
+#     return within_margin, outside_margin
 
 
-# Assumes dist(desc1, desc2) == dist(desc2, desc1)
-def get_base_metric_all_vs_all(margin: float, descriptor_dict):
-    metrics = BaseMetric(tp=0, fp=0, tn=0, fn=0)
+# # Assumes dist(desc1, desc2) == dist(desc2, desc1)
+# def get_base_metric_all_vs_all(margin: float, descriptor_dict):
+#     metrics = BaseMetric(tp=0, fp=0, tn=0, fn=0)
 
-    descriptors = []
-    label_ident = []
-    label_name = []
+#     descriptors = []
+#     label_ident = []
+#     label_name = []
 
-    # Collapse the dict to one list
-    for ident, ident_dict in descriptor_dict.items():
-        for name, data in ident_dict.items():
-            tmp2 = name.split("_")[1]
-            if "03" in tmp2 or "04" in tmp2:
-                continue
-            descriptors.append(data)
-            label_ident.append(ident)
-            label_name.append(name)
+#     # Collapse the dict to one list
+#     for ident, ident_dict in descriptor_dict.items():
+#         for name, data in ident_dict.items():
+#             tmp2 = name.split("_")[1]
+#             if "03" in tmp2 or "04" in tmp2:
+#                 continue
+#             descriptors.append(data)
+#             label_ident.append(ident)
+#             label_name.append(name)
 
-    assert len(descriptors) == len(label_ident) == len(label_name)
-    descriptors = torch.stack(descriptors)
-    distances = onlineTripletLoss.pairwise_distances(embeddings=descriptors)
+#     assert len(descriptors) == len(label_ident) == len(label_name)
+#     descriptors = torch.stack(descriptors)
+#     distances = onlineTripletLoss.pairwise_distances(embeddings=descriptors)
 
-    margins = [0.1, 0.2, 0.5, 1.0, 1.5, 2, 3]
+#     margins = [0.1, 0.2, 0.5, 1.0, 1.5, 2, 3]
 
-    for margin in margins:
-        metrics = BaseMetric(tp=0, fp=0, tn=0, fn=0)
-        # TODO make in matrix notation?
-        # Check all vs all, same ID
-        length = descriptors.size()[0]
-        for idx1 in range(length):
-            for idx2 in range(idx1+1, length):  # Do not check it against previous checked (Half of matrix used only)
-                assert idx1 != idx2  # Do not check against itself
-                assert label_name[idx1] != label_name[idx2]  # Dont use label name for other than verification
-
-
-                d = distances[idx1, idx2]
-                if label_ident[idx1] == label_ident[idx2]:
-                    # Same Label, different ident
-                    if d < margin:  # Good
-                        metrics.tp += 1
-                    else:           # Bad
-                        metrics.fn += 1
-                else:
-                    # Different label
-                    if d >= margin:  # Good
-                        metrics.tn += 1
-                    else:            # Bad
-                        metrics.fp += 1
-        print(f"margin:{margin}, {generate_score_metric_from_base(metrics)}")
-
-    return metrics
+#     for margin in margins:
+#         metrics = BaseMetric(tp=0, fp=0, tn=0, fn=0)
+#         # TODO make in matrix notation?
+#         # Check all vs all, same ID
+#         length = descriptors.size()[0]
+#         for idx1 in range(length):
+#             for idx2 in range(idx1+1, length):  # Do not check it against previous checked (Half of matrix used only)
+#                 assert idx1 != idx2  # Do not check against itself
+#                 assert label_name[idx1] != label_name[idx2]  # Dont use label name for other than verification
 
 
-# torch_geometric.utils.  accuracy, precision, recall, f1
-@torch.no_grad()
-def get_metric_all_vs_all(margin: float, descriptor_dict):
-    base_metric = get_base_metric_all_vs_all(margin=margin, descriptor_dict=descriptor_dict)
-    del descriptor_dict
-    return generate_score_metric_from_base(base_metric)
+#                 d = distances[idx1, idx2]
+#                 if label_ident[idx1] == label_ident[idx2]:
+#                     # Same Label, different ident
+#                     if d < margin:  # Good
+#                         metrics.tp += 1
+#                     else:           # Bad
+#                         metrics.fn += 1
+#                 else:
+#                     # Different label
+#                     if d >= margin:  # Good
+#                         metrics.tn += 1
+#                     else:            # Bad
+#                         metrics.fp += 1
+#         print(f"margin:{margin}, {generate_score_metric_from_base(metrics)}")
+
+#     return metrics
+
+
+# # torch_geometric.utils.  accuracy, precision, recall, f1
+# @torch.no_grad()
+# def get_metric_all_vs_all(margin: float, descriptor_dict):
+#     base_metric = get_base_metric_all_vs_all(margin=margin, descriptor_dict=descriptor_dict)
+#     del descriptor_dict
+#     return generate_score_metric_from_base(base_metric)
 
 
 def split_gallery_set_vs_probe_set_BU3DFE(descriptor_dict):
@@ -276,6 +278,7 @@ def split_gallery_set_vs_probe_set_frgc(descriptor_dict):
 #     return get_metric_gallery_set_vs_probe_set(gallery_dict, probe_dict)
 
 
+# Note: got ulgy when I added bosp specific logging
 def get_metric_gallery_set_vs_probe_set(gallery_descriptors_dict, probe_descriptors_dict, bosp=False):
     
     gal_descriptors = []
@@ -747,50 +750,48 @@ def generate_identification_rate_by_rank(rank_tp_dict):
     # print(identification_rate_by_rank)
     return identification_rate_by_rank
 
-@torch.no_grad()
-def generate_cmc(siamese, device, gallery_descriptors_dict, probe_descriptors_dict):
-    rank_tp_dict = generate_metirc_siamese_rank1_cmc(siamese, device, gallery_descriptors_dict, probe_descriptors_dict)
-    identification_rate_by_rank = generate_identification_rate_by_rank(rank_tp_dict)
+# @torch.no_grad()
+# def generate_cmc(siamese, device, gallery_descriptors_dict, probe_descriptors_dict):
+#     rank_tp_dict = generate_metirc_siamese_rank1_cmc(siamese, device, gallery_descriptors_dict, probe_descriptors_dict)
+#     identification_rate_by_rank = generate_identification_rate_by_rank(rank_tp_dict)
     
-    fig = plt.figure()
-    plt.title("CMC")
-    plt.plot(list(range(1, len(identification_rate_by_rank)+1)), identification_rate_by_rank, color="darkorange", marker="o", clip_on=False, label = "TODO")  # b
-    plt.ylabel("Identification Rate")
-    plt.xlabel("Rank")
-    plt.legend(loc="lower right")
-    plt.xlim(left=1, right=len(identification_rate_by_rank))
-    plt.locator_params(axis="x", integer=True)
-    plt.grid(True)
-    return fig
+#     fig = plt.figure()
+#     plt.title("CMC")
+#     plt.plot(list(range(1, len(identification_rate_by_rank)+1)), identification_rate_by_rank, color="darkorange", marker="o", clip_on=False, label = "TODO")  # b
+#     plt.ylabel("Identification Rate")
+#     plt.xlabel("Rank")
+#     plt.legend(loc="lower right")
+#     plt.xlim(left=1, right=len(identification_rate_by_rank))
+#     plt.locator_params(axis="x", integer=True)
+#     plt.grid(True)
+#     return fig
 
-from sklearn.metrics import roc_curve, auc
-import matplotlib.pyplot as plt
-import io
-import PIL.Image 
-from torchvision.transforms import ToTensor
-@torch.no_grad()
-def generate_roc(y_true, y_score):
-    y_true = y_true.cpu()
-    y_score = y_score.cpu()
-    false_positive_rate, recall, thresholds = roc_curve(y_true, y_score)
-    roc_auc = auc(false_positive_rate, recall)
-    fig = plt.figure()  # fig, ax = plt.subplots
-    plt.title("Receiver Operating Characteristic (ROC)")
-    plt.plot(false_positive_rate, recall, color="darkorange", label = "AUC = %0.3f" % roc_auc)  # b
-    plt.legend(loc="lower right")
-    plt.plot([0,1], [0,1], lw=2, linestyle="--")  # "r--"
-    plt.xlim([-0.05,1.05])
-    plt.ylim([-0.05,1.05])
-    plt.ylabel("True Positive Rate (Recall)")
-    plt.xlabel("False positive Rate (1-Specificity) (FAR-false acceptance rate)")
-    plt.grid(True)
-    return fig
-    # buf = io.BytesIO()
-    # plt.savefig(buf, format='jpeg')
-    # buf.seek(0)
-    # image = PIL.Image.open(buf)
-    # image = ToTensor()(image)
-    # return image
+# from sklearn.metrics import roc_curve, auc
+# import matplotlib.pyplot as plt
+# # Test roc, and not finale
+# @torch.no_grad()
+# def generate_roc(y_true, y_score):
+#     y_true = y_true.cpu()
+#     y_score = y_score.cpu()
+#     false_positive_rate, recall, thresholds = roc_curve(y_true, y_score)
+#     roc_auc = auc(false_positive_rate, recall)
+#     fig = plt.figure()  # fig, ax = plt.subplots
+#     plt.title("Receiver Operating Characteristic (ROC)")
+#     plt.plot(false_positive_rate, recall, color="darkorange", label = "AUC = %0.3f" % roc_auc)  # b
+#     plt.legend(loc="lower right")|
+#     plt.plot([0,1], [0,1], lw=2, linestyle="--")  # "r--"
+#     plt.xlim([-0.05,1.05])
+#     plt.ylim([-0.05,1.05])
+#     plt.ylabel("True Positive Rate (Recall)")
+#     plt.xlabel("False positive Rate (1-Specificity) (FAR-false acceptance rate)")
+#     plt.grid(True)
+#     return fig
+#     # buf = io.BytesIO()
+#     # plt.savefig(buf, format='jpeg')
+#     # buf.seek(0)
+#     # image = PIL.Image.open(buf)
+#     # image = ToTensor()(image)
+#     # return image
 
 
 

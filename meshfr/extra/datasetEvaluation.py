@@ -1,6 +1,6 @@
-import meshfr.dataset.datasetBU3DFEv2 as datasetBU3DFEv2
-import meshfr.dataset.datasetBosphorus as datasetBosphorus
-import meshfr.dataset.dataset3DFace as dataset3DFace
+import meshfr.datasets.datasetBU3DFEv2 as datasetBU3DFEv2
+import meshfr.datasets.datasetBosphorus as datasetBosphorus
+import meshfr.datasets.dataset3DFace as dataset3DFace
 import os
 
 pickled = True

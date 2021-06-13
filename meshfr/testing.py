@@ -8,7 +8,7 @@ from torch.nn import Sequential as Seq, Linear, Linear as Lin, ReLU, BatchNorm1d
 from torch_geometric.datasets import ModelNet
 import torch_geometric.transforms as T
 #from torch_geometric.data import DataLoader  # Instead of this, use modified dataloader to not throw away data 
-from dataset.datasetGeneric import DataLoader
+from datasets.datasetGeneric import DataLoader
 from torch_geometric.nn import PointConv, fps, radius, global_max_pool
 
 from torch_geometric.data.batch import Batch
@@ -164,7 +164,7 @@ def test_1_regular_poitnet():
 # Test 2 - poitnet++ with triplet loss
 import torch_geometric.data.batch as geometric_batch
 import tripletloss.onlineTripletLoss as onlineTripletLoss
-import metrics
+import meshfr.evaluation.metrics as metrics
 def train2(epoch, model, device, dataloader, optimizer, margin, criterion):
     model.train()
 
@@ -695,7 +695,7 @@ class TestNet55_descv2(torch.nn.Module):
 
 # Test 5 - convnet with triplet loss
 import torch_geometric.data.batch as geometric_batch
-import metrics
+import meshfr.evaluation.metrics as metrics
 def train5(epoch, model, device, dataloader, optimizer, margin, criterion):
     model.train()
 
@@ -774,7 +774,7 @@ def train5(epoch, model, device, dataloader, optimizer, margin, criterion):
         return losses, dist_a_p, dist_a_n
     return losses, dist_a_p, dist_a_n, lengths, max_losses, max_dist_a_ps, min_dist_a_ns
 
-import dataset.datasetBU3DFEv2 as datasetBU3DFE
+import datasets.datasetBU3DFEv2 as datasetBU3DFE
 import math
 def test_5_convnet_triplet():
     POST_TRANSFORM = T.Compose([T.FaceToEdge(remove_faces=True), T.NormalizeScale()])
@@ -787,7 +787,7 @@ def test_5_convnet_triplet():
 
     import pickle
 
-    import dataset.reduction_transform as reduction_transform
+    import datasets.reduction_transform as reduction_transform
     # with torch.no_grad():
     #     pre_redux = reduction_transform.SimplifyQuadraticDecimationBruteForce(2048)
     #     from tqdm import tqdm
@@ -809,8 +809,8 @@ def test_5_convnet_triplet():
     dataloader_bu3dfe_all = DataLoader(dataset=dataset_bu3dfe, batch_size=2, shuffle=False, num_workers=0, drop_last=False)
     #dataloader = dataloader_bu3dfe
 
-    import dataset.datasetBosphorus as datasetBosphorus
-    from dataset.datasetGeneric import GenericDataset
+    import datasets.datasetBosphorus as datasetBosphorus
+    from datasets.datasetGeneric import GenericDataset
     bosphorus_path = "/lhome/haakowar/Downloads/Bosphorus/BosphorusDB"
     # bosphorus_dict = datasetBosphorus.get_bosphorus_dict("/tmp/invalid", pickled=True)
     bosphorus_dict = datasetBosphorus.get_bosphorus_dict(bosphorus_path, pickled=True, force=False, picke_name="/tmp/Bosphorus_cache-full-2pass.p")
@@ -821,7 +821,7 @@ def test_5_convnet_triplet():
     dataloader_bosphorus_all = DataLoader(dataset=dataset_bosphorus, batch_size=2, shuffle=False, num_workers=0, drop_last=False)
     # dataloader = DataLoader(dataset=bosphorus_train_set, batch_size=4, shuffle=True, num_workers=0, drop_last=True)
 
-    from dataset.datasetFRGC import get_frgc_dict
+    from datasets.datasetFRGC import get_frgc_dict
     frgc_path = "/lhome/haakowar/Downloads/FRGCv2/Data/"
     dataset_frgc_fall_2003 = get_frgc_dict(frgc_path + "Fall2003range", pickled=True,force=False, picke_name="FRGCv2-fall2003_cache.p")
     dataset_frgc_spring_2003 = get_frgc_dict(frgc_path + "Spring2003range", pickled=True, force=False, picke_name="FRGCv2-spring2003_cache.p")
@@ -1164,7 +1164,7 @@ def test_7_softmax_embeddings2():
     # dataset_cached = BU3DFE_HELPER.get_cached_dataset()
 
     import pickle
-    import dataset.reduction_transform as reduction_transform
+    import datasets.reduction_transform as reduction_transform
     # with torch.no_grad():
     #     pre_redux = reduction_transform.SimplifyQuadraticDecimationBruteForce(2048)
     #     from tqdm import tqdm
@@ -1186,8 +1186,8 @@ def test_7_softmax_embeddings2():
     dataloader_bu3dfe_all = DataLoader(dataset=dataset, batch_size=2, shuffle=False, num_workers=0, drop_last=False)
     #dataloader = dataloader_bu3dfe
 
-    import dataset.datasetBosphorus as datasetBosphorus
-    from dataset.datasetGeneric import GenericDataset
+    import datasets.datasetBosphorus as datasetBosphorus
+    from datasets.datasetGeneric import GenericDataset
     bosphorus_path = "/lhome/haakowar/Downloads/Bosphorus/BosphorusDB"
     # bosphorus_dict = datasetBosphorus.get_bosphorus_dict("/tmp/invalid", pickled=True)
     bosphorus_dict = datasetBosphorus.get_bosphorus_dict(bosphorus_path, pickled=False, force=False, picke_name="/tmp/Bosphorus_cache-full-2pass-1000.p")
@@ -1375,12 +1375,17 @@ def train8_sia(model, siam, device, dataloader, optimizer, criterion):
 # import matplotlib.pyplot as plt
 import matplotlib.pyplot as plt
 import evaluation.realEvaluation as evaluation
-import dataset.reduction_transform as reduction_transform
-from dataset.datasetGeneric import ExtraTransform
+import datasets.reduction_transform as reduction_transform
+from datasets.datasetGeneric import ExtraTransform
 def test_8_convnet_triplet():
     # POST_TRANSFORM = T.Compose([T.FaceToEdge(remove_faces=True), T.NormalizeScale()])
     POST_TRANSFORM = T.Compose([T.FaceToEdge(remove_faces=True), T.NormalizeScale()])
-    POST_TRANSFORM_Extra = T.Compose([T.RandomTranslate(0.01), T.RandomRotate(5, axis=0), T.RandomRotate(5, axis=1), T.RandomRotate(5, axis=2)])
+    POST_TRANSFORM_Extra = T.Compose([
+        T.RandomTranslate(0.01),
+        T.RandomRotate(5, axis=0),
+        T.RandomRotate(5, axis=1),
+        T.RandomRotate(5, axis=2)
+        ])
     # POST_TRANSFORM = T.Compose([T.FaceToEdge(remove_faces=True), T.Center()])
     # POST_TRANSFORM = T.Compose([T.NormalizeScale(), T.SamplePoints(1024), T.Delaunay(), T.FaceToEdge(remove_faces=True)])
     torch.manual_seed(1)
@@ -1406,8 +1411,8 @@ def test_8_convnet_triplet():
     def dload(dataset, batch_size, predicable, num_workers=0):
        return DataLoader(dataset=dataset, batch_size=batch_size, shuffle=not predicable, num_workers=num_workers, drop_last=not predicable)
 
-    import dataset.datasetBU3DFEv2 as datasetBU3DFEv2
-    from dataset.datasetGeneric import GenericDataset
+    import datasets.datasetBU3DFEv2 as datasetBU3DFEv2
+    from datasets.datasetGeneric import GenericDataset
     bu3dfe_path = "/lhome/haakowar/Downloads/BU_3DFE"
     bu3dfe_dict =  datasetBU3DFEv2.get_bu3dfe_dict(bu3dfe_path, pickled=pickled, force=force, picke_name="/tmp/Bu3dfe-2048.p", sample="bruteforce", sample_size=1024*2)
     dataset_bu3dfe = GenericDataset(bu3dfe_dict, POST_TRANSFORM)
@@ -1421,7 +1426,7 @@ def test_8_convnet_triplet():
         dataloader = dload(bu3dfe_train_set, batch_size=10, predicable=False, num_workers=5)
 
 
-    import dataset.datasetBosphorus as datasetBosphorus
+    import datasets.datasetBosphorus as datasetBosphorus
     bosphorus_path = "/lhome/haakowar/Downloads/Bosphorus/BosphorusDB"
     # bosphorus_dict = datasetBosphorus.get_bosphorus_dict("/tmp/invalid", pickled=True)
     # "/tmp/Bosphorus_cache-full-2pass.p"
@@ -1435,7 +1440,7 @@ def test_8_convnet_triplet():
     if train_on == "bosp":
         dataloader = dload(bosphorus_train_set, batch_size=4, predicable=False)
 
-    from dataset.datasetFRGC import get_frgc_dict
+    from datasets.datasetFRGC import get_frgc_dict
     frgc_path = "/lhome/haakowar/Downloads/FRGCv2/Data/"
     dataset_frgc_fall_2003 = get_frgc_dict(frgc_path + "Fall2003range", pickled=pickled, force=force, picke_name="/tmp/FRGCv2-fall2003_cache-2048-new.p", sample=sample, sample_size=sample_size)
     dataset_frgc_spring_2003 = get_frgc_dict(frgc_path + "Spring2003range", pickled=pickled, force=force, picke_name="/tmp/FRGCv2-spring2003_cache-2048-new.p", sample=sample, sample_size=sample_size)
@@ -1452,7 +1457,7 @@ def test_8_convnet_triplet():
     if train_on == "frgc":
         dataloader = dload(dataset_frgc_train, batch_size=20, predicable=False)
 
-    from dataset.dataset3DFace import get_3dface_dict
+    from datasets.dataset3DFace import get_3dface_dict
     d3face_path = "/lhome/haakowar/Downloads/3DFace_DB/3DFace_DB/"
     d3face_dict = get_3dface_dict(d3face_path, pickled=pickled, force=force, picke_name="/tmp/3dface-12k.p", sample="all", sample_size=4096*3)
     d3face_dataset_all = GenericDataset(d3face_dict, POST_TRANSFORM)
@@ -1472,8 +1477,9 @@ def test_8_convnet_triplet():
         dataloader = dload(dataset_bu3dfe_frgc_bosp_train, batch_size=5, predicable=False)
 
     # Load the model
-    # assert torch.cuda.is_available()
-    device = torch.device('cpu')
+    assert torch.cuda.is_available()
+    device = torch.device('cuda')
+    print(f"PSA: using {device}")
     model = TestNet55_descv2().to(device)
     # model = Net().to(device)
     siam = Siamese_part().to(device)
@@ -1494,13 +1500,15 @@ def test_8_convnet_triplet():
         LOG.add_scalar("loss/train-avg", avg_loss, epoch)
 
         with torch.no_grad():
+            # Generate a graph of the network
+            # When using pytorch geometric, it is a mess, and can be used too see the memory limitations
             # if epoch == 2:
             #     sample_data = next(iter(dataloader))
             #     single_data = sample_data[0].get_example(0).to(device)
             #     LOG.add_graph(model, [(single_data.pos, single_data.edge_index)])
             
             pr_curve_samples = 1023
-            toprint = [[],[],[]]  # 3 types of metrics
+            toprint = [[],[],[]]  # 3 types of metrics ergo 3 buckets
 
             def savefig(fig, dir, name):
                 if type(LOG).__name__ != "Dummy":
@@ -1522,13 +1530,13 @@ def test_8_convnet_triplet():
                 metric.log_maximal(full_name, tag, epoch, LOG)
                 LOG.add_scalar(f"loss/{full_name}-{tag}", loss, epoch)
                 LOG.add_pr_curve(f"{full_name}-pr/{tag}", labels, preds, epoch, num_thresholds=pr_curve_samples)
-                roc_fig =  metrics.generate_roc(labels, preds)
+                #roc_fig =  metrics.generate_roc(labels, preds)
 
                 # Save figure
-                folderpath = os.path.join(logging_dir, logging_name, f"{full_name}-roc-{tag}")
-                savefig(roc_fig, folderpath, f"roc-{epoch}.pdf")
-                LOG.add_figure(f"{full_name}-roc/{tag}", roc_fig, epoch)
-                plt.close(roc_fig)
+                #folderpath = os.path.join(logging_dir, logging_name, f"{full_name}-roc-{tag}")
+                #savefig(roc_fig, folderpath, f"roc-{epoch}.pdf")
+                #LOG.add_figure(f"{full_name}-roc/{tag}", roc_fig, epoch)
+                #plt.close(roc_fig)
                 
             # Takes some arguments implicit, like model, siamese model, device, criterion
             def generate_log_block(dataset_name, tag, dataloadr, gal_probe_split):

@@ -1,4 +1,4 @@
-import meshfr.metrics as metrics
+import meshfr.evaluation.metrics as metrics
 import matplotlib.pyplot as plt
 
 markers = ["o", "^", "p", "X"]

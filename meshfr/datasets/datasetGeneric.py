@@ -5,7 +5,6 @@ import numpy as np
 import torch_geometric.data
 
 # Generic dataloader for face-dict of type [ident][face]
-
 class GenericDataset(Dataset):
     def __init__(self, dataset_dict: dict, transform, name_filter=lambda l: True):
         self.dataset_dict = dataset_dict
@@ -43,18 +42,6 @@ class GenericDataset(Dataset):
             out.append(d)
         return torch_geometric.data.Batch.from_data_list(out)
 
-import torch.utils.data.dataloader
-import utils
-# Currently, pytorch_geometric overwrites the collate_fn
-# https://github.com/rusty1s/pytorch_geometric/blob/3e8baf28c86eebbf6da74be36ea3904ec77480b8/torch_geometric/data/dataloader.py#L57
-# So that's a thing
-class DataLoader(torch.utils.data.DataLoader):
-    def __init__(self, dataset, batch_size=1, shuffle=False, **kwargs):
-        if "collate_fn" in kwargs:
-            del kwargs["collate_fn"]
-
-        super(DataLoader, self).__init__(dataset, batch_size, shuffle, collate_fn=utils.list_collate_fn, **kwargs)
-
 class ExtraTransform(Dataset):
     def __init__(self, subset, transform=None):
         self.subset = subset
@@ -68,3 +55,25 @@ class ExtraTransform(Dataset):
         
     def __len__(self):
         return len(self.subset)
+
+
+
+# You can argue that this is stupid
+# This function is used to overwrite the pytorch geometric standard
+#   collate function which uses (as of 13.06.2021) a zipping function
+#   that restricts the batch to all contain the same amount of scans
+#   as the smalest identity.  
+def list_collate_fn(batch):
+    return batch
+
+
+import torch.utils.data.dataloader
+# Currently, pytorch_geometric overwrites the collate_fn
+# https://github.com/rusty1s/pytorch_geometric/blob/3e8baf28c86eebbf6da74be36ea3904ec77480b8/torch_geometric/data/dataloader.py#L57
+# So that's a thing
+class DataLoader(torch.utils.data.DataLoader):
+    def __init__(self, dataset, batch_size=1, shuffle=False, **kwargs):
+        if "collate_fn" in kwargs:
+            del kwargs["collate_fn"]
+
+        super(DataLoader, self).__init__(dataset, batch_size, shuffle, collate_fn=list_collate_fn, **kwargs)

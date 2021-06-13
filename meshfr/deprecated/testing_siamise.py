@@ -188,7 +188,7 @@ def train5(epoch, model, device, dataloader, optimizer, margin, criterion):
         return losses, dist_a_p, dist_a_n
     return losses, dist_a_p, dist_a_n, lengths, max_losses, max_dist_a_ps, min_dist_a_ns
 
-import dataset.datasetBU3DFE as datasetBU3DFE
+import datasets.datasetBU3DFE as datasetBU3DFE
 import math
 def test_5_convnet_triplet():
     import meshfr.database.reduction_transform as reduction_transform

@@ -7,7 +7,6 @@ import torch_geometric.transforms
 
 # from torch_geometric.io import read_obj  # replaced with modified
 from meshfr.io.read_obj import read_obj
-from meshfr.utils import list_collate_fn
 
 random.seed(1)
 import torch
@@ -89,6 +88,8 @@ class FaceGenDataset(Dataset):
 
 # simple test
 if __name__ == "__main__":
+    from meshfr.datasets.datasetGeneric import list_collate_fn
+    
     facegen_helper = FaceGenDatasetHelper()
     dataset = FaceGenDataset(facegen_helper.get_cached_dataset())
     print("len", len(dataset))

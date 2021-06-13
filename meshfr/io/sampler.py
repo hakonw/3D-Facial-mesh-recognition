@@ -3,7 +3,7 @@ import torch_geometric.utils
 import torch
 from scipy.spatial import Delaunay
 from trimesh import Trimesh
-import meshfr.dataset.reduction_transform as reduction_transform
+import meshfr.datasets.reduction_transform as reduction_transform
 import numpy as np
 
 def data_all_sample(data):
