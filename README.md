@@ -24,6 +24,9 @@ pip install --no-index torch-cluster -f https://pytorch-geometric.com/whl/torch-
 pip install --no-index torch-spline-conv -f https://pytorch-geometric.com/whl/torch-1.7.0+cu110.html
 pip install git+https://github.com/rusty1s/pytorch_geometric.git
 pip install -e git+https://github.com/rusty1s/pytorch_geometric.git@master#egg=torch_geometric
+
+# Install codebase as a package. Must be inside the git root
+pip install -e .
 ```
 
 This repo also uses the dataset FaceGen, which is not publicly available at the moment.

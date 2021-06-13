@@ -1,6 +1,6 @@
-import dataset.datasetBU3DFEv2
-import dataset.datasetBosphorus
-import dataset.dataset3DFace
+import meshfr.dataset.datasetBU3DFEv2 as datasetBU3DFEv2
+import meshfr.dataset.datasetBosphorus as datasetBosphorus
+import meshfr.dataset.dataset3DFace as dataset3DFace
 import os
 
 pickled = True
@@ -10,15 +10,15 @@ sample_size = [1024*2, 1024*6]
 
 
 bu3dfe_path = "/lhome/haakowar/Downloads/BU_3DFE"
-bu3dfe_dict =  dataset.datasetBU3DFEv2.get_bu3dfe_dict(bu3dfe_path, pickled=pickled, force=force, picke_name="/tmp/Bu3dfe-2048.p", sample="bruteforce", sample_size=1024*2)
+bu3dfe_dict =  datasetBU3DFEv2.get_bu3dfe_dict(bu3dfe_path, pickled=pickled, force=force, picke_name="/tmp/Bu3dfe-2048.p", sample="bruteforce", sample_size=1024*2)
 
 bosphorus_path = "/lhome/haakowar/Downloads/Bosphorus/BosphorusDB"
-bosphorus_dict = dataset.datasetBosphorus.get_bosphorus_dict(bosphorus_path, pickled=pickled, force=force, picke_name="/tmp/Bosphorus-2048-filter-new.p", sample=sample, sample_size=sample_size)
+bosphorus_dict = datasetBosphorus.get_bosphorus_dict(bosphorus_path, pickled=pickled, force=force, picke_name="/tmp/Bosphorus-2048-filter-new.p", sample=sample, sample_size=sample_size)
 
 frgc_path = "/lhome/haakowar/Downloads/FRGCv2/Data/"
-dataset_frgc_fall_2003 = dataset.dataset3DFace.get_frgc_dict(frgc_path + "Fall2003range", pickled=pickled, force=force, picke_name="/tmp/FRGCv2-fall2003_cache-2048-new.p", sample=sample, sample_size=sample_size)
-dataset_frgc_spring_2003 = dataset.dataset3DFace.get_frgc_dict(frgc_path + "Spring2003range", pickled=pickled, force=force, picke_name="/tmp/FRGCv2-spring2003_cache-2048-new.p", sample=sample, sample_size=sample_size)
-dataset_frgc_spring_2004 = dataset.dataset3DFace.get_frgc_dict(frgc_path + "Spring2004range", pickled=pickled, force=force, picke_name="/tmp/FRGCv2-spring2004_cache-2048-new.p", sample=sample, sample_size=sample_size)
+dataset_frgc_fall_2003 = dataset3DFace.get_frgc_dict(frgc_path + "Fall2003range", pickled=pickled, force=force, picke_name="/tmp/FRGCv2-fall2003_cache-2048-new.p", sample=sample, sample_size=sample_size)
+dataset_frgc_spring_2003 = dataset3DFace.get_frgc_dict(frgc_path + "Spring2003range", pickled=pickled, force=force, picke_name="/tmp/FRGCv2-spring2003_cache-2048-new.p", sample=sample, sample_size=sample_size)
+dataset_frgc_spring_2004 = dataset3DFace.get_frgc_dict(frgc_path + "Spring2004range", pickled=pickled, force=force, picke_name="/tmp/FRGCv2-spring2004_cache-2048-new.p", sample=sample, sample_size=sample_size)
 
 # BU-3DFE: F0001_NE00WH
 # Bosp: bs000_N_N_0

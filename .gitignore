@@ -19,6 +19,9 @@
 # Pickle files  (contains datasets, which are not to be distributed)
 *.p
 
+# Autogenetarted package egg files
+*.egg-info
+
 ###########
 # Folders #
 ###########

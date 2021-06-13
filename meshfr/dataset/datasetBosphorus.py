@@ -2,8 +2,8 @@ import os.path
 from glob import glob
 import pickle
 from tqdm import tqdm
-from io.read_bnt import read_bnt_raw
-import io.sampler as sampler
+from meshfr.io.read_bnt import read_bnt_raw
+import meshfr.io.sampler as sampler
 
 
 # global_relevant = lambda name: "_N_N_" in name or "_E_" in name

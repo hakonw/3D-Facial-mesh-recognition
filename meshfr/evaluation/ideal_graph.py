@@ -1,5 +1,4 @@
 import matplotlib.pyplot as plt
-import matplotlib.ticker as ticker
 import numpy as np
 
 #  https://matplotlib.org/stable/gallery/color/named_colors.html

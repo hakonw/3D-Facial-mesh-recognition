@@ -1,5 +1,5 @@
 import torch
-import onlineTripletLoss
+from . import onlineTripletLoss
 
 
 # Functions used to generate triplets

@@ -1,4 +1,3 @@
-from torch.utils import data
 from torch_geometric.data import Dataset
 import random
 import numpy as np

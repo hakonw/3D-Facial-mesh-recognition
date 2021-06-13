@@ -47,7 +47,7 @@ if __name__ == "__main__":
     # See how hybrid sampling changes it
     from scipy.spatial import Delaunay
     from trimesh import Trimesh
-    import reduction_transform
+    from . import reduction_transform
     # Sample n_vertices_prefit points
     n_rows = data.shape[0]
     random_indices = np.random.choice(

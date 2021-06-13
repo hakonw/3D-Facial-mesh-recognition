@@ -774,7 +774,7 @@ def train5(epoch, model, device, dataloader, optimizer, margin, criterion):
         return losses, dist_a_p, dist_a_n
     return losses, dist_a_p, dist_a_n, lengths, max_losses, max_dist_a_ps, min_dist_a_ns
 
-import dataset.datasetBU3DFE as datasetBU3DFE
+import dataset.datasetBU3DFEv2 as datasetBU3DFE
 import math
 def test_5_convnet_triplet():
     POST_TRANSFORM = T.Compose([T.FaceToEdge(remove_faces=True), T.NormalizeScale()])
@@ -787,7 +787,7 @@ def test_5_convnet_triplet():
 
     import pickle
 
-    import reduction_transform
+    import dataset.reduction_transform as reduction_transform
     # with torch.no_grad():
     #     pre_redux = reduction_transform.SimplifyQuadraticDecimationBruteForce(2048)
     #     from tqdm import tqdm
@@ -1150,7 +1150,6 @@ def test_6_softmax_embeddings():
             print(f"Saving {name}")
             torch.save(model.state_dict(), name)
 
-import read_bnt
 def test_7_softmax_embeddings2():
     # def sampling(s): return read_bnt.data_simple_sample(s, 2048*2)
     # POST_TRANSFORM_sample = T.Compose([sampling, T.FaceToEdge(remove_faces=True), T.NormalizeScale()])
@@ -1165,7 +1164,7 @@ def test_7_softmax_embeddings2():
     # dataset_cached = BU3DFE_HELPER.get_cached_dataset()
 
     import pickle
-    import reduction_transform
+    import dataset.reduction_transform as reduction_transform
     # with torch.no_grad():
     #     pre_redux = reduction_transform.SimplifyQuadraticDecimationBruteForce(2048)
     #     from tqdm import tqdm
@@ -1376,7 +1375,7 @@ def train8_sia(model, siam, device, dataloader, optimizer, criterion):
 # import matplotlib.pyplot as plt
 import matplotlib.pyplot as plt
 import evaluation.realEvaluation as evaluation
-import reduction_transform
+import dataset.reduction_transform as reduction_transform
 from dataset.datasetGeneric import ExtraTransform
 def test_8_convnet_triplet():
     # POST_TRANSFORM = T.Compose([T.FaceToEdge(remove_faces=True), T.NormalizeScale()])
@@ -1473,8 +1472,8 @@ def test_8_convnet_triplet():
         dataloader = dload(dataset_bu3dfe_frgc_bosp_train, batch_size=5, predicable=False)
 
     # Load the model
-    assert torch.cuda.is_available()
-    device = torch.device('cuda')
+    # assert torch.cuda.is_available()
+    device = torch.device('cpu')
     model = TestNet55_descv2().to(device)
     # model = Net().to(device)
     siam = Siamese_part().to(device)

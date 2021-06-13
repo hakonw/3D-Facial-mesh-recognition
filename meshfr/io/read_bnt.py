@@ -1,6 +1,4 @@
 import numpy as np
-import sampler
-
 
 def read_bnt_raw(filename):
     f = open(filename, "r")
@@ -46,6 +44,7 @@ def read_bnt_raw(filename):
 
 
 if __name__ == "__main__":
+    import sampler
     filename = "./bs104_N_N_3.bnt"
 
     from datetime import datetime

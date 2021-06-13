@@ -2,14 +2,12 @@ import os.path
 from glob import glob
 import random
 import pickle
-
-# from torch_geometric.io import read_obj  # replaced with modified
-from read_obj import read_obj
-from utils import list_collate_fn
 from torch.utils.data import Dataset
 import torch_geometric.transforms
 
-import torch_geometric.transforms as T
+# from torch_geometric.io import read_obj  # replaced with modified
+from meshfr.io.read_obj import read_obj
+from meshfr.utils import list_collate_fn
 
 random.seed(1)
 import torch

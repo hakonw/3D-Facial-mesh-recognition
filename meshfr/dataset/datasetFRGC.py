@@ -2,8 +2,9 @@ import os.path
 from glob import glob
 import pickle
 from tqdm import tqdm
-import sampler
-from io.read_abs import read_abs_raw_gzip
+import sys; sys.path.append("..")
+import meshfr.io.sampler as sampler
+from meshfr.io.read_abs import read_abs_raw_gzip
 
 def global_relevant(name): return True
 

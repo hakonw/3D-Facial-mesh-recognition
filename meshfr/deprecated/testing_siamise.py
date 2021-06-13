@@ -191,7 +191,7 @@ def train5(epoch, model, device, dataloader, optimizer, margin, criterion):
 import dataset.datasetBU3DFE as datasetBU3DFE
 import math
 def test_5_convnet_triplet():
-    import reduction_transform
+    import meshfr.database.reduction_transform as reduction_transform
     POST_TRANSFORM = T.Compose([T.FaceToEdge(remove_faces=True),T.NormalizeScale()])
     torch.manual_seed(1); torch.cuda.manual_seed(1)    
     start_epoch = 1  # re-written if starting from a loaded save

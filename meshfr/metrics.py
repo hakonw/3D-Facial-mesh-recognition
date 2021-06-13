@@ -1,9 +1,5 @@
-from numpy.core.numeric import indices
-from torch_geometric.data import Data
-import torch_geometric.utils
 import torch
-from tqdm import tqdm
-import tripletloss.onlineTripletLoss as onlineTripletLoss
+import meshfr.tripletloss.onlineTripletLoss as onlineTripletLoss
 
 #
 # Processing of data before metrics

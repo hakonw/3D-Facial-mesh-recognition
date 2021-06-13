@@ -11,8 +11,6 @@
 
 import torch
 from torch_geometric.data import Data
-import os
-import sys
 import re
 
 
