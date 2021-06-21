@@ -322,7 +322,8 @@ def frgc_generate_roc(descriptor_dict, siam, device):
         assert len(ident_dict) == 1
 
     # Cannot filter probe as there is no markings on what type it is 
-    y_true_all, y_score_all  = metrics.generate_metric_siamese_roc_bal(siam, device, gallery_dict, probe_dict)
+    # offloading may help if it runs out of memory here 
+    y_true_all, y_score_all  = metrics.generate_metric_siamese_roc_bal(siam, device, gallery_dict, probe_dict, offload=False)
     y_true_all_v_all, y_score_all_v_all = metrics.generate_metric_siamese_roc_bal_all(siam, device, descriptor_dict)
 
 

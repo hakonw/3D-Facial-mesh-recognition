@@ -14,7 +14,7 @@ def data_all_sample(data):
     return d
 
 
-def data_simple_sample(data, n_vertices=2048):
+def data_simple_sample(data, n_vertices):
     # Sample n_vertices points
     n_rows = data.shape[0]
     random_indices = np.random.choice(n_rows, size=n_vertices, replace=False)
@@ -28,7 +28,7 @@ def data_simple_sample(data, n_vertices=2048):
     return d
 
 
-def data_2pass_sample(data, n_vertices=2048, n_vertices_prefit=8192):
+def data_2pass_sample(data, n_vertices, n_vertices_prefit):  # Good values are 2048, 8192
     assert n_vertices <= n_vertices_prefit
 
     # Sample n_vertices_prefit points
@@ -39,15 +39,15 @@ def data_2pass_sample(data, n_vertices=2048, n_vertices_prefit=8192):
     spatial = Delaunay(points=reduced_data[:, 0:2])
 
     tri = Trimesh(vertices=reduced_data, faces=spatial.simplices)
-    tri = reduction_transform.simplify_trimesh(tri, n_vertices, 2)
+    tri = reduction_transform.simplify_trimesh(tri, n_vertices, n_vertices//32, n_vertices//32)
     d = torch_geometric.utils.from_trimesh(tri)
     return d
 
 
-def data_bruteforce_sample(data, n_vertices=2048):
+def data_bruteforce_sample(data, n_vertices):
     spatial = Delaunay(points=data[:, 0:2])  # Create mesh for everything
 
     tri = Trimesh(vertices=data, faces=spatial.simplices)
-    tri = reduction_transform.simplify_trimesh(tri, n_vertices, 2)
+    tri = reduction_transform.simplify_trimesh(tri, n_vertices, n_vertices//32, n_vertices//32)
     d = torch_geometric.utils.from_trimesh(tri)
     return d

@@ -9,7 +9,8 @@ from meshfr.io.read_abs import read_abs_raw_gzip
 def global_relevant(name): return True
 
 
-def generate_frgc_dict(root, filtered=True, filter=global_relevant, sample="bruteforce", sample_size=2048):
+def generate_frgc_dict(root, filtered=True, filter=global_relevant, sample="bruteforce", sample_size=None):
+    assert sample_size
     dataset = {}
     
     # There are no sub folders, as for every date, every ident is in one folder
@@ -17,7 +18,7 @@ def generate_frgc_dict(root, filtered=True, filter=global_relevant, sample="brut
     # Which are all the identities
 
     file_path_list = sorted(glob(os.path.join(root, "*.abs.gz")))
-    assert(len(file_path_list) > 0)
+    assert(len(file_path_list) > 0), f"No identity found in folder {root}"
     # 04717d43.abs.gz
 
     def add(identity, basename, value):
@@ -36,7 +37,7 @@ def generate_frgc_dict(root, filtered=True, filter=global_relevant, sample="brut
             
         data_raw = read_abs_raw_gzip(file_path)
         if sample == "2pass": data_sampled = sampler.data_2pass_sample(data_raw, sample_size[0], sample_size[1])
-        elif sample == "bruteforce": data_sampled = sampler.data_bruteforce_sample(data_raw)
+        elif sample == "bruteforce": data_sampled = sampler.data_bruteforce_sample(data_raw, sample_size)
         elif sample == "random": data_sampled = sampler.data_simple_sample(data_raw, sample_size)
         elif sample == "all": data_sampled = sampler.data_all_sample(data_raw)
         else: raise ValueError("Invalid argument", sample)
@@ -51,7 +52,7 @@ def generate_frgc_dict(root, filtered=True, filter=global_relevant, sample="brut
 # DOES NOT CHECK IF FILTER IS CHANGED
 # TODO maybe save entire dataset, followed by applying filter post?
 # Or possibly both
-def get_frgc_dict(root, pickled, force=False, picke_name="FRGCv2_cache.p", filter=global_relevant, sample="2pass", sample_size=2048):
+def get_frgc_dict(root, pickled, force=False, picke_name="FRGCv2_cache.p", filter=global_relevant, sample="2pass", sample_size=None):
     if pickled and not force:
         try:
             print("Loading pickle")

@@ -2,14 +2,18 @@
 import torch_geometric.utils
 
 def simplify_trimesh(trimesh, target, undershootmargin, overshootmargin=0):
+    if trimesh.vertices.shape[0] <= target:
+        return trimesh
+    sizes = []
     for _ in range(20):
         vertices = trimesh.vertices.shape[0]
         faces = trimesh.faces.shape[0]
 
+        sizes.append(vertices)
         if (target-undershootmargin) <= vertices <= (target+overshootmargin):
             return trimesh
         if vertices < target - undershootmargin:
-            raise RuntimeError(f"Optimized too much. TODO fix {trimesh}")
+            raise RuntimeError(f"Optimized too much. TODO fix {trimesh}, {sizes}")
 
         must_remove_vertices = vertices - target
         must_remove_faces = must_remove_vertices # //2 -1  # Possibly add a factor here

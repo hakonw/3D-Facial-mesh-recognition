@@ -33,6 +33,7 @@ class FaceGenDatasetHelper:
             folders = sorted(dirs)
             break  # prevent descending into subfolders
 
+        assert len(folders) > 0
         # Load the model for each identity
         for folder in folders:
             file_path_reg = os.path.join(root, folder, "Data", folder + ".obj")

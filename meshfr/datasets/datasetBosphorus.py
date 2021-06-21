@@ -9,7 +9,7 @@ import meshfr.io.sampler as sampler
 # global_relevant = lambda name: "_N_N_" in name or "_E_" in name
 # global_relevant = lambda name: "IGN" not in name
 global_relevant = lambda name: "_N_N_" in name or "_LFAU_" in name or "_UFAU_" in name or "_CAU_" in name or "_E_" in name
-def generate_bosphorus_dict(root, filtered=True, filter=global_relevant, sample="bruteforce", sample_size=2048):
+def generate_bosphorus_dict(root, filtered=True, filter=global_relevant, sample="bruteforce", sample_size=None):
     dataset = {}
 
     # Find all sub-folders
@@ -19,6 +19,7 @@ def generate_bosphorus_dict(root, filtered=True, filter=global_relevant, sample=
         folders = sorted(dirs)
         break  # prevent descending into subfolders
 
+    assert len(folders) > 0, f"No identity found in folder {root}"
     pbar = tqdm(folders)
     for folder in pbar:
         pbar.set_description(f"Processing {folder}")
@@ -36,7 +37,7 @@ def generate_bosphorus_dict(root, filtered=True, filter=global_relevant, sample=
 
             data_raw = read_bnt_raw(file_path)
             if sample == "2pass": data_sampled = sampler.data_2pass_sample(data_raw, sample_size[0], sample_size[1])
-            elif sample == "bruteforce": data_sampled = sampler.data_bruteforce_sample(data_raw)
+            elif sample == "bruteforce": data_sampled = sampler.data_bruteforce_sample(data_raw, sample_size)
             elif sample == "random": data_sampled = sampler.data_simple_sample(data_raw, sample_size)
             elif sample == "all": data_sampled = sampler.data_all_sample(data_raw)
             else: raise ValueError("Invalid argument", sample)
@@ -51,7 +52,8 @@ def generate_bosphorus_dict(root, filtered=True, filter=global_relevant, sample=
 # DOES NOT CHECK IF FILTER IS CHANGED
 # TODO maybe save entire dataset, followed by applying filter post?
 # Or possibly both
-def get_bosphorus_dict(root, pickled, force=False, picke_name="Bosphorus_cache.p", filter=global_relevant, sample="2pass", sample_size=2048):
+def get_bosphorus_dict(root, pickled, force=False, picke_name="Bosphorus_cache.p", filter=global_relevant, sample="2pass", sample_size=None):
+    assert sample_size
     if pickled and not force:
         try:
             print("Loading pickle")

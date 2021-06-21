@@ -21,6 +21,7 @@ def generate_3dface_dict(root, sample="2pass", sample_size=2048):
         break  # prevent descending into subfolders
 
     # Find all scans for each identity
+    assert len(folders) > 0, f"No identity found in folder {root}"
     pbar = tqdm(folders)
     for folder in pbar:
         # Find all ply files in each subdir

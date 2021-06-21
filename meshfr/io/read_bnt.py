@@ -49,20 +49,33 @@ if __name__ == "__main__":
 
     from datetime import datetime
 
+    data = read_bnt_raw(filename)
     start = datetime.now()
     for _ in range(10):
-        data = read_bnt_raw(filename)
-        sampler.data_simple_sample(data)
+        sampler.data_simple_sample(data, 1024)
     stop = datetime.now()
-    print(f"Time simple: {stop-start}")
+    print(f"Time simple: {(stop-start)}")
+    print(f"Time simple-avg: {(stop-start)/10}")
     # Time simple with shuffle: 0:00:00.411078
     # Time simple with choice:  0:00:00.121709
     # Time simple data:         0:00:00.070138
 
+    import torch
+    from scipy.spatial import Delaunay
+    n_rows = data.shape[0]
+    random_indices = np.random.choice(n_rows, size=1024, replace=False)
+    reduced_data = data[random_indices, :]
+
+    start = datetime.now()
+    for _ in range(100):
+        spatial = Delaunay(points=reduced_data[:, 0:2])
+    stop = datetime.now()
+    print(f"Time triang-avg: {(stop-start)/100}")
+
     start = datetime.now()
     for _ in range(10):
         data = read_bnt_raw(filename)
-        sampler.data_2pass_sample(data)
+        sampler.data_2pass_sample(data, 1024, 1024*4)
     stop = datetime.now()
     print(f"Time hybrid: {stop-start}")
     # Time hybrid with shuffle: 0:00:02.271874

@@ -471,6 +471,7 @@ def generate_metric_siamese(siamese, device, criterion, descriptor_dict, offload
     datas, labels = generate_flat_descriptor_dict(descriptor_dict, device)
     if offload:
         datas = datas.cpu()
+        # device = torch.device("cpu")
 
     # This also creates pairs of the same descriptor. Beware if it messes with metric
     labels_combi = torch.combinations(labels, r=2, with_replacement=True)
@@ -498,8 +499,9 @@ def generate_metric_siamese(siamese, device, criterion, descriptor_dict, offload
     pred = torch.cat(results, dim=0)
     loss = criterion(pred, labels_1d.float())
 
-    correct = (pred>0.5).eq(labels_1d).sum().item()
+    # correct = (pred>0.5).eq(labels_1d).sum().item()
     total = pred.shape[0]
+    # print("pred", pred.shape, "indecies_pos", indecies_pos.shape)  # 
     tp = (pred[indecies_pos]>0.5).eq(labels_1d[indecies_pos]).sum().item()
     tn = (pred[indecies_neg]>0.5).eq(labels_1d[indecies_neg]).sum().item()
     fn = pred[indecies_pos].shape[0] - tp
@@ -590,7 +592,7 @@ def generate_metric_siamese_roc(siamese, device, gallery_descriptors_dict, probe
     return y_true, y_score
 
 @torch.no_grad()
-def generate_metric_siamese_roc_bal(siamese, device, gallery_descriptors_dict, probe_descriptors_dict):
+def generate_metric_siamese_roc_bal(siamese, device, gallery_descriptors_dict, probe_descriptors_dict, offload=False):
     siamese.eval()
 
     gal_datas, gal_labels = generate_flat_descriptor_dict(gallery_descriptors_dict, device)
@@ -599,6 +601,10 @@ def generate_metric_siamese_roc_bal(siamese, device, gallery_descriptors_dict, p
     # Add singleton dimension before expansiopn (instead of transpose)
     datas1 = gal_datas.unsqueeze(1).repeat(1, probe_datas.shape[0], 1) # size: gal, probe, gal-desc
     datas2 = probe_datas.repeat(gal_datas.shape[0], 1, 1)              # size: gal, probe, probe-desc
+
+    if offload:
+        datas1 = datas1.cpu()
+        datas2 = datas1.cpu()
 
     # Labels of type [gal, probe] -> id
     gal_labels_expanded = gal_labels.unsqueeze(1).repeat(1, probe_labels.shape[0])  # size: gal, probe
@@ -665,7 +671,7 @@ def generate_metric_siamese_roc_bal(siamese, device, gallery_descriptors_dict, p
 
 
     # [N positive pairs + N negative pairs, descriptors]
-    result_matrix = siamese(combined_datas_1, combined_datas_2)
+    result_matrix = siamese(combined_datas_1.to(device), combined_datas_2.to(device))
 
     # Flatten
     y_score = result_matrix.flatten()
@@ -676,7 +682,7 @@ def generate_metric_siamese_roc_bal(siamese, device, gallery_descriptors_dict, p
     return y_true, y_score
 
 @torch.no_grad()
-def generate_metric_siamese_roc_bal_all(siamese, device, dict):
+def generate_metric_siamese_roc_bal_all(siamese, device, dict, offload=False):
     siamese.eval()
 
     datas, labels = generate_flat_descriptor_dict(dict, device)
@@ -685,6 +691,11 @@ def generate_metric_siamese_roc_bal_all(siamese, device, dict):
     indecies = torch.arange(datas.shape[0]).to(device); # Create indicies for all possible conbinations
     indecies = torch.combinations(indecies, r=2, with_replacement=True)
     labels_combi = labels[indecies[:, 0]].eq(labels[indecies[:, 1]])
+
+    if offload:
+        datas = datas.cpu()
+        indecies = indecies.cpu()
+        labels_combi = labels_combi.cpu()
 
     # balance
     # Find indecies for all positive.
@@ -715,7 +726,7 @@ def generate_metric_siamese_roc_bal_all(siamese, device, dict):
     descriptors_combi_2 = datas[indecies[:, 1]]
 
     # [N positive pairs + N negative pairs, descriptors]
-    result = siamese(descriptors_combi_1, descriptors_combi_2)
+    result = siamese(descriptors_combi_1.to(device), descriptors_combi_2.to(device))
 
     # Flatten
     y_score = result.flatten()
@@ -794,7 +805,7 @@ def generate_identification_rate_by_rank(rank_tp_dict):
 #     # return image
 
 
-
+# Is more memory friendly, but takes longer time. Should collapse larger batch to a single batch for speed
 @torch.no_grad()
 def generate_descriptor_dict_from_dataloader(model, dataloader, device):
     model.eval()
@@ -803,7 +814,7 @@ def generate_descriptor_dict_from_dataloader(model, dataloader, device):
     for larger_batch in dataloader:
         for batch in larger_batch:
             batch = batch.to(device)
-            output = model(batch).to("cpu")
+            output = model(batch) #.to("cpu")
 
             ids = batch.dataset_id  # Real ID, not generated number id
             names = batch.name
