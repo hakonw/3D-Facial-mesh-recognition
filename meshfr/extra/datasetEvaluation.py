@@ -58,16 +58,17 @@ write_off(c(bu3dfe_example), f"./export/bu3dfe-{bu3dfe_full}-center.off")
 write_off(c(bosp_example), f"./export/bosp-{bosp_full}-center.off")
 write_off(c(frgc_example), f"./export/frgc-{frgc_full}-center.off")
 
-from io.read_wrl import read_wrl  # Data object
-from io.read_bnt import read_bnt_raw, data_all_sample
-from io.read_abs import read_abs_raw_gzip
+from meshfr.io.read_wrl import read_wrl  # Data object
+from meshfr.io.read_bnt import read_bnt_raw
+from meshfr.io.sampler import data_all_sample
+from meshfr.io.read_abs import read_abs_raw_gzip
 
 print("Loading raw examples")
 bu3dfe_example_raw = read_wrl(os.path.join(bu3dfe_path, bu3dfe_id, bu3dfe_full + "_F3D.wrl"))
 bosp_example_raw = data_all_sample(read_bnt_raw(os.path.join(bosphorus_path, bosp_id, bosp_full + ".bnt")))
 frgc_example_raw = data_all_sample(read_abs_raw_gzip(os.path.join(frgc_path, "Fall2003range", frgc_full + ".abs.gz")))
 
-print("Reading raw examples")
+print("Writing raw examples")
 write_off(bu3dfe_example_raw, f"./export/bu3dfe-{bu3dfe_full}-raw.off")
 write_off(bosp_example_raw, f"./export/bosp-{bosp_full}-raw.off")
 write_off(frgc_example_raw, f"./export/frgc-{frgc_full}-raw.off")
@@ -76,4 +77,15 @@ write_off(c(bu3dfe_example_raw), f"./export/bu3dfe-{bu3dfe_full}-raw-center.off"
 write_off(c(bosp_example_raw), f"./export/bosp-{bosp_full}-raw-center.off")
 write_off(c(frgc_example_raw), f"./export/frgc-{frgc_full}-raw-center.off")
 
+print("Writing transformed model")
+import meshfr.datasets.reduction_transform as reduction_transform
+POST_TRANSFORM = T.Compose([T.FaceToEdge(remove_faces=False), T.Center()])
+# POST_TRANSFORM_Extra = T.Compose([])
+POST_TRANSFORM_Extra = T.Compose([
+    reduction_transform.RandomTranslateScaled(0.01),
+    T.RandomRotate(5, axis=0),
+    T.RandomRotate(5, axis=1),
+    T.RandomRotate(5, axis=2)
+    ])
 
+write_off(POST_TRANSFORM_Extra(POST_TRANSFORM(bu3dfe_example_raw)), f"./export/bu3dfe-{bu3dfe_full}-new-random-scale.off")

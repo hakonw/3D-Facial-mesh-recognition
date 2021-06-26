@@ -432,13 +432,15 @@ def generate_metirc_siamese_rank1(siamese, device, criterion, gallery_descriptor
     # print("ident", correct_identity_matrix.shape)  # [20, 480] or [80, 1920]
 
     result_matrix = siamese(datas1, datas2)
-    loss = criterion(result_matrix, correct_identity_matrix.float())
+    # loss = criterion(result_matrix, correct_identity_matrix.float())
 
     # Make it [probe, gal]
     result_matrix = torch.transpose(result_matrix, 0, 1)
     
     # Find best ident
+    # idxs_max = torch.argmax(result_matrix, dim=1)  # "Check each row"
     idxs_max = torch.argmax(result_matrix, dim=1)  # "Check each row"
+    # WARNING; argmax if similarity score, argmin if distance
 
     metrics = BaseMetric(tp=0, fp=0, tn=0, fn=0)
 
@@ -460,7 +462,8 @@ def generate_metirc_siamese_rank1(siamese, device, criterion, gallery_descriptor
     #         if not found_valid:
     #             metrics.fp += 1
 
-    return loss.item(), generate_score_metric_from_base(metrics)
+    # return loss.item(), generate_score_metric_from_base(metrics)
+    return None, generate_score_metric_from_base(metrics)
 
 @torch.no_grad()
 def generate_metric_siamese(siamese, device, criterion, descriptor_dict, offload=False):
@@ -499,17 +502,22 @@ def generate_metric_siamese(siamese, device, criterion, descriptor_dict, offload
     pred = torch.cat(results, dim=0)
     loss = criterion(pred, labels_1d.float())
 
+
     # correct = (pred>0.5).eq(labels_1d).sum().item()
     total = pred.shape[0]
     # print("pred", pred.shape, "indecies_pos", indecies_pos.shape)  # 
-    tp = (pred[indecies_pos]>0.5).eq(labels_1d[indecies_pos]).sum().item()
-    tn = (pred[indecies_neg]>0.5).eq(labels_1d[indecies_neg]).sum().item()
-    fn = pred[indecies_pos].shape[0] - tp
-    fp = pred[indecies_neg].shape[0] - tn
-    assert (tp+tn+fn+fp) == total
+    # print((pred[indecies_pos]>0.5).type)
+    # print((labels_1d[indecies_pos]).type)
+    # tp = (pred[indecies_pos]>0.5).eq(labels_1d[indecies_pos]).sum().item()
+    # tn = (pred[indecies_neg]>0.5).eq(labels_1d[indecies_neg]).sum().item()
+    # fn = pred[indecies_pos].shape[0] - tp
+    # fp = pred[indecies_neg].shape[0] - tn
+    # assert (tp+tn+fn+fp) == total
 
-    metric = BaseMetric(tp, fp, tn, fn)
-    return loss.item(), generate_score_metric_from_base(metric), pred, labels_1d.float()
+    # metric = BaseMetric(tp, fp, tn, fn)
+    # return loss.item(), generate_score_metric_from_base(metric), pred, labels_1d.float()
+    metric = BaseMetric(0,0,0,0)
+    return 0,  generate_score_metric_from_base(metric), [], []
 
 import sklearn.metrics
 
@@ -545,6 +553,7 @@ def generate_metirc_siamese_rank1_cmc(siamese, device, gallery_descriptors_dict,
 
     # Find best idents
     sorted_results, sorted_results_idx = torch.sort(result_matrix, dim=1, descending=True)  # Get the highest values first
+     # WARNING; descending should be true for the highest values first (similarieies), false for distance
 
     # TODO this can most likely be done more efficently with matrixes
     for probe_idx in range(sorted_results_idx.shape[0]):
@@ -640,12 +649,16 @@ def generate_metric_siamese_roc_bal(siamese, device, gallery_descriptors_dict, p
     # Also save the RNG for reproducibility
     amount_positive_pairs = flat_correct_labels.shape[0]
     t_seed = torch.get_rng_state()
-    t_seed_gpu = torch.cuda.get_rng_state(device)
+    try: t_seed_gpu = torch.cuda.get_rng_state(device)
+    except: pass
     t_seed_rand = torch.random.get_rng_state()
-    torch.random.manual_seed(1); torch.cuda.manual_seed(1); torch.manual_seed(1)
+    torch.random.manual_seed(1); torch.manual_seed(1); 
+    try: torch.cuda.manual_seed(1)
+    except: pass
     perm = torch.randperm(only_neg_pairs_datas1.shape[0], device=device)
     torch.random.set_rng_state(t_seed_rand)
-    torch.cuda.set_rng_state(t_seed_gpu, device)
+    try: torch.cuda.set_rng_state(t_seed_gpu, device)
+    except: pass
     torch.set_rng_state(t_seed)
 
     idx = perm[:amount_positive_pairs]
@@ -703,10 +716,16 @@ def generate_metric_siamese_roc_bal_all(siamese, device, dict, offload=False):
     label_pos = labels_combi[labels_combi.eq(1)]
 
     # Find indecies for alle negative pairs
-    t_seed = torch.get_rng_state(); t_seed_gpu = torch.cuda.get_rng_state(device); t_seed_rand = torch.random.get_rng_state()
-    torch.random.manual_seed(1); torch.cuda.manual_seed(1); torch.manual_seed(1)
+    t_seed = torch.get_rng_state(); t_seed_rand = torch.random.get_rng_state(); 
+    try: t_seed_gpu = torch.cuda.get_rng_state(device)
+    except: pass
+    torch.random.manual_seed(1); torch.manual_seed(1)
+    try: torch.cuda.manual_seed(1)
+    except: pass
     mask_neg = torch.randperm(indecies[labels_combi.eq(0)].shape[0])[:indecies_pos.shape[0]]  # Create a random mask of the same size as indicies pos
-    torch.random.set_rng_state(t_seed_rand); torch.cuda.set_rng_state(t_seed_gpu, device); torch.set_rng_state(t_seed)
+    torch.random.set_rng_state(t_seed_rand); torch.set_rng_state(t_seed)
+    try: torch.cuda.set_rng_state(t_seed_gpu, device)
+    except: pass
 
     indecies_neg = indecies[labels_combi.eq(0)][mask_neg]
     label_neg = labels_combi[labels_combi.eq(0)][mask_neg]

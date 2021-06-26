@@ -213,6 +213,7 @@ def generate_veritication_rate(y_true, y_score, FAR_targets=[0.001, 0.01]): # TO
     total = y_true.shape[0]
     accs = []
 
+    # This part figures out the tresholds and verification rate at FAR_targets
     # Tresholds is decreasing, and fpr is increasing
     for FAR_target in FAR_targets:
         optimal_tresh = 1.0
@@ -235,7 +236,7 @@ def generate_veritication_rate(y_true, y_score, FAR_targets=[0.001, 0.01]): # TO
         print(f"{inspect.stack()[2][3]}\tFAR: {FAR_target}, Accuracy: {acc:.5f} at tresh:{optimal_tresh:.5f} and fpr: {achived_fpr:.5f}, (prev: {next_fpr:.5f})")
         
         
-
+    # This part figures out every treshold for every far
     # Generate a curve for accuracy VS FPR
     # Will be as long as fpr, and tresholds
     accuracies = []

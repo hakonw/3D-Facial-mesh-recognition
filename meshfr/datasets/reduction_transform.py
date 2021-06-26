@@ -49,4 +49,61 @@ class DelaunayIt(object):
         # d = torch_geometric.data.Data(pos=pos, face=faces)  # Note Face not Faces
         data.face = faces
         return data
+
+from torch_geometric.transforms import Center
+class NormalizeScale(object):
+    r"""Centers and translates the  node positions to the interval :math:`(-1, 1)`.
+    """
+
+    def __init__(self):
+        self.center = Center()
+
+    def __call__(self, data):
+        data = self.center(data)
+
+        scale = (1 / data.pos.abs().max()) * 0.999999
+        data.pos = data.pos * scale
+
+        return data
+
+    def __repr__(self):
+        return '{}()'.format(self.__class__.__name__)
     
+import numbers
+from itertools import repeat
+import torch
+class RandomTranslateScaled(object):
+    r"""Translates node positions by randomly sampled translation values
+    within a given interval. In contrast to other random transformations,
+    translation is applied separately at each position.
+
+    Args:
+        translate (sequence or float or int): Maximum translation in each
+            dimension, defining the range
+            :math:`(-\mathrm{translate}, +\mathrm{translate})` to sample from.
+            If :obj:`translate` is a number instead of a sequence, the same
+            range is used for each dimension.
+    """
+
+    def __init__(self, translate):
+        self.translate = translate
+
+    def __call__(self, data):
+        (n, dim), t = data.pos.size(), self.translate
+        scale = data.pos.abs().max() * 0.999999
+        if isinstance(t, numbers.Number):
+            t = t * scale
+            t = list(repeat(t, times=dim))
+        else: 
+            t = [t0 * scale for t0 in t]
+        assert len(t) == dim
+
+        ts = []
+        for d in range(dim):
+            ts.append(data.pos.new_empty(n).uniform_(-abs(t[d]), abs(t[d])))
+
+        data.pos = data.pos + torch.stack(ts, dim=-1)
+        return data
+
+    def __repr__(self):
+        return '{}({})'.format(self.__class__.__name__, self.translate)

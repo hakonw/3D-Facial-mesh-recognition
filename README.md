@@ -39,7 +39,6 @@ pip3 install torch-sparse -f https://pytorch-geometric.com/whl/torch-1.9.0+cu111
 pip3 install torch-cluster -f https://pytorch-geometric.com/whl/torch-1.9.0+cu111.html
 pip3 install torch-spline-conv -f https://pytorch-geometric.com/whl/torch-1.9.0+cu111.html
 pip3 install torch-geometric
-# pip3 install -e git+https://github.com/rusty1s/pytorch_geometric.git@master#egg=torch_geometric
 
 ```
 
@@ -51,7 +50,7 @@ pip install -e .
 
 Either install the latest released pytorch_geometric via:
 `pip install torch-geometric`
-or install master as shown in the setup instructions.  
+or install master `pip3 install -e git+https://github.com/rusty1s/pytorch_geometric.git@master#egg=torch_geometric`.  
 Master may be unstable, but contain some newer fixes. During development, only master had a fix for bug for the pooling.
 
 ## Running
@@ -65,9 +64,11 @@ Cuda 11.2 has issues has pytorch is skipping that cuda version.
 cd ntnuhome/git/3d-face-gdl
 conda activate pytorch-geometric
 
-# To run it, do
-python meshfr/testing.py
+# To run it with logging, do
+python meshfr/testing.py NAME-OF-EXPERIMENT
 ```
+It can also be run without logging with `python meshfr/testing.py q`
+
 
 
 Run tensorboard with `tensorboard --logdir=logdir --port 6006`. Replace logdir with the newest logging directory
