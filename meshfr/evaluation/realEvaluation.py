@@ -233,7 +233,11 @@ def generate_veritication_rate(y_true, y_score, FAR_targets=[0.001, 0.01]): # TO
         acc = true_predicted / total
         accs.append(acc)
 
-        print(f"{inspect.stack()[2][3]}\tFAR: {FAR_target}, Accuracy: {acc:.5f} at tresh:{optimal_tresh:.5f} and fpr: {achived_fpr:.5f}, (prev: {next_fpr:.5f})")
+        try: 
+            f_name = inspect.stack()[2][3]
+        except:
+            f_name = "FAILED"
+        print(f"{f_name}\tFAR: {FAR_target}, Accuracy: {acc:.5f} at tresh:{optimal_tresh:.5f} and fpr: {achived_fpr:.5f}, (prev: {next_fpr:.5f})")
         
         
     # This part figures out every treshold for every far

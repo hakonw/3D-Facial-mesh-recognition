@@ -24,9 +24,10 @@ import meshfr.datasets.reduction_transform as reduction_transform  # Homemade tr
 import meshfr.tripletloss.onlineTripletLoss as onlineTripletLoss
 
 import matplotlib.pyplot as plt  # Used to fix memory leak
+import os
 import numpy as np
-import random 
-import time 
+import random
+import time
 from datetime import timedelta
 
 
@@ -117,13 +118,14 @@ class PointnetPP(torch.nn.Module):
 
 
 class TestNet55_descv2(torch.nn.Module):
-    def __init__(self):
+    def __init__(self, softmax=False):
         super(TestNet55_descv2, self).__init__()
         torch.manual_seed(1)
         torch.cuda.manual_seed(1)
 
         self.embeddings = True  # Default return embeddings
-        self.fcSoftmax = Linear(128, 105)
+        if softmax:
+            self.fcSoftmax = Linear(128, 105)
 
         self.activation = ReLU()
 
@@ -446,16 +448,25 @@ def train8_sia(model, siam, device, dataloader, optimizer, criterion):
 
 def test_8_convnet_triplet():
     POST_TRANSFORM = T.Compose([T.FaceToEdge(remove_faces=True), T.NormalizeScale()])
-    # POST_TRANSFORM_Extra = T.Compose([])
-    POST_TRANSFORM_Extra = T.Compose([
-        # reduction_transform.RandomTranslateScaled(0.0075),
+    # POST_TRANSFORM = T.Compose([T.FaceToEdge(remove_faces=True), T.Center()])
+
+    # POST_TRANSFORM_Extra = T.Compose([])  # To disable training augmentation
+    POST_TRANSFORM_EXTRA = T.Compose([
+        # reduction_transform.RandomTranslateScaled(0.0075),  # weighted random translate
         T.RandomTranslate(0.01),
         T.RandomRotate(5, axis=0),
         T.RandomRotate(5, axis=1),
         T.RandomRotate(5, axis=2)
         ])
-    # POST_TRANSFORM = T.Compose([T.FaceToEdge(remove_faces=True), T.Center()])
-    # POST_TRANSFORM = T.Compose([T.NormalizeScale(), T.RandomTranslate(0.01), T.RandomRotate(5, axis=0), T.RandomRotate(5, axis=1), T.RandomRotate(5, axis=2), T.SamplePoints(1024), reduction_transform.DelaunayIt(), T.FaceToEdge(remove_faces=True)])
+    # POST_TRANSFORM_EXTRA = T.Compose([
+        # T.RandomTranslate(0.01), 
+        # T.RandomRotate(5, axis=0), 
+        # T.RandomRotate(5, axis=1), 
+        # T.RandomRotate(5, axis=2), 
+        # T.SamplePoints(1024), 
+        # reduction_transform.DelaunayIt(), 
+        # T.FaceToEdge(remove_faces=True)])
+
     torch.manual_seed(1)
     torch.cuda.manual_seed(1)
     start_epoch = 1  # re-written if starting from a loaded save
@@ -468,7 +479,8 @@ def test_8_convnet_triplet():
     siamese_network_type = "triplet"
     assert siamese_network_type in ["siamese", "triplet", "softmax"]
     assert siamese_network_type != "softmax" or "+" in train_on  # DO NOT MIX SOFTMAX AND DATASETS
-    # When using softmax, make sure that the fcSoftmax is correctly configured
+    # Triplet or softmax sadly disables validation/training loss
+    if siamese_network_type == "softmax": print("Make sure that fcSoftmax is correctly configured")
 
     # Global properties
     pickled = True
@@ -504,9 +516,8 @@ def test_8_convnet_triplet():
     bu3dfe_dict =  datasetBU3DFEv2.get_bu3dfe_dict(bu3dfe_path, pickled=pickled, force=force, picke_name="/tmp/Bu3dfe-2048.p", sample="bruteforce", sample_size=1024*2)
     dataset_bu3dfe = GenericDataset(bu3dfe_dict, POST_TRANSFORM)
     bu3dfe_train_set, bu3dfe_test_set = torch.utils.data.random_split(dataset_bu3dfe, [80, 20], generator=torch.Generator().manual_seed(42))
-    bu3dfe_train_set = ExtraTransform(bu3dfe_train_set, POST_TRANSFORM_Extra)
+    bu3dfe_train_set = ExtraTransform(bu3dfe_train_set, POST_TRANSFORM_EXTRA)
     # Regular dataloader followed by two test dataloader (seen data, and unseen data)
-    # TODO set back to 5, and 10
     dataloader_bu3dfe_train = dload(bu3dfe_train_set, batch_size=4, predicable=True)
     dataloader_bu3dfe_test  = dload(bu3dfe_test_set, batch_size=4, predicable=True)
     dataloader_bu3dfe_all   = dload(dataset_bu3dfe, batch_size=4, predicable=True)
@@ -517,7 +528,7 @@ def test_8_convnet_triplet():
     bosphorus_dict = datasetBosphorus.get_bosphorus_dict(bosphorus_path, pickled=pickled, force=force, picke_name="/tmp/Bosphorus-2048-filter-new.p", sample=sample, sample_size=sample_size)
     dataset_bosphorus = GenericDataset(bosphorus_dict, POST_TRANSFORM)
     bosphorus_train_set, bosphorus_test_set = torch.utils.data.random_split(dataset_bosphorus, [80, 25], generator=torch.Generator().manual_seed(42))
-    bosphorus_train_set = ExtraTransform(bosphorus_train_set, POST_TRANSFORM_Extra)
+    bosphorus_train_set = ExtraTransform(bosphorus_train_set, POST_TRANSFORM_EXTRA)
     dataloader_bosphorus_test  = dload(bosphorus_test_set, batch_size=4, predicable=True)
     dataloader_bosphorus_train = dload(bosphorus_train_set, batch_size=4, predicable=True)
     dataloader_bosphorus_all   = dload(dataset_bosphorus, batch_size=4, predicable=True)  # change to 2 for low memory
@@ -532,7 +543,7 @@ def test_8_convnet_triplet():
     dataset_frgc_spring_2003 = GenericDataset(frgc_spring_2003_dict, POST_TRANSFORM)
     dataset_frgc_spring_2004 = GenericDataset(frgc_spring_2004_dict, POST_TRANSFORM)
     dataset_frgc_train = torch.utils.data.ConcatDataset([dataset_frgc_spring_2003])  # As per doc, Spring2003 is train, rest is val
-    dataset_frgc_train = ExtraTransform(dataset_frgc_train, POST_TRANSFORM_Extra)
+    dataset_frgc_train = ExtraTransform(dataset_frgc_train, POST_TRANSFORM_EXTRA)
     dataset_frgc_test = torch.utils.data.ConcatDataset([dataset_frgc_fall_2003, dataset_frgc_spring_2004])  # As per doc, Spring2003 is train, rest is val
     dataloader_frgc_train = dload(dataset_frgc_train, batch_size=2, predicable=True)
     dataloader_frgc_test = dload(dataset_frgc_test, batch_size=2, predicable=True)
@@ -563,6 +574,7 @@ def test_8_convnet_triplet():
         dataset_frgc_bosp_train = torch.utils.data.ConcatDataset([bu3dfe_train_set, bosphorus_train_set])
         dataloader = dload(dataset_frgc_bosp_train, batch_size=10, predicable=False, num_workers=num_workers_train)
 
+
     if run_on_device == "cuda":
         assert torch.cuda.is_available()
         device = torch.device('cuda')
@@ -572,32 +584,28 @@ def test_8_convnet_triplet():
         print(f"os: {os.cpu_count()}, torch {torch.get_num_threads()}")
         
 
+    s = siamese_network_type == "softmax"  # To load older model that does not use softmax. TODO possibly always enable it
     # Load the model
     print(f"PSA: using {device}")
-    model = TestNet55_descv2().to(device)
+    model = TestNet55_descv2(softmax=s).to(device)
     # model = PointnetPP().to(device)  # To test with pointnet as a feature extractor
     if siamese_network_type == "siamese":
         siam = Siamese_part().to(device)
         criterion = torch.nn.BCELoss()
     elif siamese_network_type == "triplet" or siamese_network_type == "softmax":
         siam = Siamese_part_distance().to(device)
-        criterion = None
+        criterion = None  # Sadly disables validation/training loss. It was not compatible
 
     # print("Loading save")
     # model.load_state_dict(torch.load("./logging-siamese-1905-namechange-trash/2021-06-17_lr1e-03_batchsize6_testing-bosp-norm-t001-r5-axis012/model-500.pt"))
     # siam.load_state_dict(torch.load("./logging-siamese-1905-namechange-trash/2021-06-17_lr1e-03_batchsize6_testing-bosp-norm-t001-r5-axis012/model-siam-500.pt"))
     # start_epoch += 1000
 
-    # print("Loading save")
-    # model.load_state_dict(torch.load("./logging-siamese-1905-namechange-trash/2021-06-13_lr1e-03_batchsize10_testing-bu3dfe-norm-translate001-rotate5-axis012/model-6000.pt", map_location=device))
-    # siam.load_state_dict(torch.load("./logging-siamese-1905-namechange-trash/2021-06-13_lr1e-03_batchsize10_testing-bu3dfe-norm-translate001-rotate5-axis012/model-siam-3000.pt", map_location=device))
-    # start_epoch += 6000
-    
-    # print("Loading save")
-    # model.load_state_dict(torch.load("./logging-siamese-1905-namechange-trash/2021-06-23_lr1e-03_batchsize20_bu3dfe-norm-translate001-rotate5-axis012-TRIPLET-fresh-small-net-smaller2/model-500.pt", map_location=device))
-    # start_epoch += 500
-    
-    # optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+    print("loading save")
+    model.load_state_dict(torch.load("./logging-siamese-1905-namechange-trash/2021-06-26_lr1e-03_batchsize6_bsop-norm-translate001-rotate5-axis012-SIAMESE-fresh-full-net/model-2500.pt"))
+    start_epoch += 2500
+
+    # Siam is allowed to be empty
     optimizer = torch.optim.Adam(list(model.parameters()) + list(siam.parameters()), lr=1e-3)
 
     LOG = ask_for_writer(dataloader, optimizer)
@@ -607,7 +615,8 @@ def test_8_convnet_triplet():
     for epoch in range(start_epoch, max_epochs):
         model.train()
         siam.train()
-        start = time.time()
+        start = time.time()  # Time estimate
+
         if siamese_network_type == "siamese":
             losses, correct, correct_pos_pair, correct_neg_pair = train8_sia(model, siam, device, dataloader, optimizer, criterion)
         elif siamese_network_type == "triplet":
@@ -616,17 +625,21 @@ def test_8_convnet_triplet():
             model.embeddings = False
             losses, total_samples, correct_samples = train8_softmax(model, device, dataloader, optimizer)
             model.embeddings = True
+        
         out = time.time()
         time_avg = (time_avg + (out-start))/2
+        time_left = str(timedelta(seconds=((max_epochs-epoch)*time_avg))).split('.')[0]
         avg_loss = sum(losses)/len(losses)
         if siamese_network_type == "siamese":
-            print(f"Epoch:{epoch}, avg_loss: {avg_loss:.4f}, correct: {sum(correct)/len(correct):.4f},\tpospair ({sum(correct_pos_pair)}),\tnegpair ({sum(correct_neg_pair)})\tavg-time: {int(time_avg)}s, estimate left: {str(timedelta(seconds=((max_epochs-epoch)*time_avg))).split('.')[0]}")
+            print(f"Epoch:{epoch}, avg_loss: {avg_loss:.4f}, correct: {sum(correct)/len(correct):.4f},\tpospair ({sum(correct_pos_pair)}),\tnegpair ({sum(correct_neg_pair)})\tavg-time: {int(time_avg)}s, estimate left: {time_left}")
         elif siamese_network_type == "triplet":
-            print(f"Epoch:{epoch}, avg_loss: {avg_loss:.4f}, avg_desc_length: {(sum(lengths)/len(lengths)):.2f}, max_loss: {max(max_losses):.4f}, max_dist_a_p: {max(max_dist_a_ps):.4f}, min_dist_a_n: {min(min_dist_a_ns):.4f}, \tavg-time: {int(time_avg)}s, estimate left: {str(timedelta(seconds=((max_epochs-epoch)*time_avg))).split('.')[0]}")
+            print(f"Epoch:{epoch}, avg_loss: {avg_loss:.4f}, avg_desc_length: {(sum(lengths)/len(lengths)):.2f}, max_loss: {max(max_losses):.4f}, max_dist_a_p: {max(max_dist_a_ps):.4f}, min_dist_a_n: {min(min_dist_a_ns):.4f}, \tavg-time: {int(time_avg)}s, estimate left: {time_left}")
         elif siamese_network_type == "softmax":
-            print(f"Epoch:{epoch}, avg_loss: {avg_loss:.4f}, total_samples: {total_samples}, correct_samples: {correct_samples}\tavg-time: {int(time_avg)}s, estimate left: {str(timedelta(seconds=((max_epochs-epoch)*time_avg))).split('.')[0]}")
+            print(f"Epoch:{epoch}, avg_loss: {avg_loss:.4f}, total_samples: {total_samples}, correct_samples: {correct_samples}\tavg-time: {int(time_avg)}s, estimate left: {int(time_left)}")
         LOG.add_scalar("loss/train-avg", avg_loss, epoch)
 
+
+        # Metrics
         with torch.no_grad():
             # Generate a graph of the network
             # When using pytorch geometric, it is a mess, and can be used too see the memory limitations
@@ -635,9 +648,7 @@ def test_8_convnet_triplet():
             #     single_data = sample_data[0].get_example(0).to(device)
             #     LOG.add_graph(model, [(single_data.pos, single_data.edge_index)])
             
-            pr_curve_samples = 1023
-            toprint = [[],[],[]]  # 3 types of metrics ergo 3 buckets (descriptor rank1, siamese verification, siamese rank1)
-
+            toprint = [[],[],[]]  # 3 types of metrics ergo 3 buckets (descriptor rank1, UNUSED, siamese rank1)
             def savefig(fig, dir, name):
                 if type(LOG).__name__ != "Dummy":
                     if not os.path.exists(dir):
@@ -649,25 +660,6 @@ def test_8_convnet_triplet():
                 toprint[print_order].append(f"{experiment_type}-{dataset_name}-{tag}\t{loss}{metric.__str_short__() if short else metric}")
                 metric.log_minimal(f"{dataset_name}-{experiment_type}", tag, epoch, LOG)
             
-            # TODO revert offload
-            def generate_siamese_verification(siam, device, criterion, descriptor_dict, dataset_name, tag, print_order):
-                # offload = "frgc" in dataset_name or "bosp" in dataset_name
-                offload = "frgc" in dataset_name  # The FRGC dataset is so large that it needs to be offlaoded to the CPU
-                loss, metric, preds, labels = metrics.generate_metric_siamese(siam, device, criterion, descriptor_dict, offload)
-
-                full_name = f"{dataset_name}-siamese-verification"
-                toprint[print_order].append(f"siamese-verification-{dataset_name}-{tag},\tloss:{loss:.3f}, {metric}")
-                metric.log_maximal(full_name, tag, epoch, LOG)
-                LOG.add_scalar(f"loss/{full_name}-{tag}", loss, epoch)
-                LOG.add_pr_curve(f"{full_name}-pr/{tag}", labels, preds, epoch, num_thresholds=pr_curve_samples)
-                #roc_fig =  metrics.generate_roc(labels, preds)
-
-                # Save figure
-                #folderpath = os.path.join(logging_dir, logging_name, f"{full_name}-roc-{tag}")
-                #savefig(roc_fig, folderpath, f"roc-{epoch}.pdf")
-                #LOG.add_figure(f"{full_name}-roc/{tag}", roc_fig, epoch)
-                #plt.close(roc_fig)
-                
             # Takes some arguments implicit, like model, siamese model, device, criterion
             def generate_log_block(dataset_name, tag, dataloadr, gal_probe_split):
                 descriptor_dict = metrics.generate_descriptor_dict_from_dataloader(model=model, dataloader=dataloadr, device=device)
@@ -676,9 +668,6 @@ def test_8_convnet_triplet():
                 # Descriptor rank1
                 metric = metrics.get_metric_gallery_set_vs_probe_set(gallery_dict, probe_dict)
                 generate_rank1(metric, dataset_name, "descriptor-rank1", tag, print_order=0)
-
-                # Siamese verification
-                # generate_siamese_verification(siam, device, criterion, descriptor_dict, dataset_name, tag, print_order=1)
 
                 # Siamese Rank1
                 loss, metric = metrics.generate_metirc_siamese_rank1(siam, device, criterion, gallery_dict, probe_dict)
@@ -777,15 +766,17 @@ def test_8_convnet_triplet():
             torch.save(model.state_dict(), name)
             torch.save(siam.state_dict(), name_siam)
 
-import os
+
+# This returns either a fake or real logger
+# Both interfaces works the same, if it is a real, it is generated from the command argument
 logging_dir = "logging-siamese-1905-namechange-trash"
 logging_name = ""
 def ask_for_writer(dataloader, optimizer):
     global logging_name
     batch_size = dataloader.batch_size
     lr = optimizer.state_dict()['param_groups'][0]['lr']
-    import inspect
-    function_name = inspect.stack()[1][3]
+    # import inspect
+    # function_name = inspect.stack()[1][3]
 
     from datetime import date
     dato = date.today().strftime("%Y-%m-%d")
@@ -794,7 +785,9 @@ def ask_for_writer(dataloader, optimizer):
     if len(sys.argv) > 1:
         extra = sys.argv[1]
     else:
-        extra = input("Siste endringer: ")
+        print("Write the experiment name (without spaces) to enable logging or type    q   if you want to disable logging ")
+        print("You can run the function   python meshfr/testing.py q    or with an logging name to skip this step ")
+        extra = input("Last changes: ")
 
     if extra == "q" or not extra:
         print("Logging disabled")
@@ -809,20 +802,12 @@ def ask_for_writer(dataloader, optimizer):
 
     navn = f"{dato}_lr{lr:1.0e}_batchsize{batch_size}_{extra.replace(' ', '-')}"
     logging_name = navn
-    import os
-    from torch.utils.tensorboard import SummaryWriter
+    from torch.utils.tensorboard import SummaryWriter  # import here, so that the package is not required
     WRITER = SummaryWriter(log_dir=os.path.join(logging_dir, navn))
     print("Logging enabled: " + navn)
     print("Full path: " + logging_dir + "/" + navn)
     return WRITER
 
 if __name__ == '__main__':
-    print(f"Cuda: {torch.cuda.is_available()}")
-    # print("test1"); test_1_regular_poitnet()
-    # print("test2"); test_2_pointnet_triplet_loss()
-    # print("test3"); test_3_poitnet_softmax()
-    # print("test4"); test_4_convnet_softmax()
-    # print("test5"); test_5_convnet_triplet()
-    # print("test6"); test_6_softmax_embeddings()
-    # print("test7"); test_7_softmax_embeddings2()
+    print(f"Cuda is avaiable?: {torch.cuda.is_available()}")
     print("test8"); test_8_convnet_triplet()
