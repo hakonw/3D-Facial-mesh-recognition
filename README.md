@@ -1,4 +1,4 @@
-# 3D Face recognition based on Geometric Deep Learning
+# Mesh based 3D face recognition using Geometric Deep Learning
 
 This is the repository for the master thesis.
 
@@ -12,16 +12,6 @@ If you want to install it in an existing venv, match the pytorch-geometric with 
 ```
 python -c "import torch; print(torch.version.cuda)"
 python -c "import torch; print(torch.__version__)"
-```
-<<<<<<< HEAD
-conda create -n pytorch3d_new python=3.8
-conda activate pytorch3d_new
-conda install -c pytorch pytorch=1.7.1 torchvision cudatoolkit=11.0
-conda install -c conda-forge -c fvcore -c iopath fvcore iopath
-conda install -c pytorch3d-nightly pytorch3d
-=======
-
->>>>>>> develop
 ```
 conda create -n pytorch-geometric python=3.8 --yes
 conda activate pytorch-geometric
@@ -68,10 +58,6 @@ and Cuda 11.1, pytorch 1.8.1 and pytorch-geometric hash:32519a5  (v1.7.0)
 Cuda 11.2 has issues has pytorch is skipping that cuda version. 
 
 ```
-# CD into the roof folder and activate enviroment
-cd ntnuhome/git/3d-face-gdl
-conda activate pytorch-geometric
-
 # To run it with logging, do
 python meshfr/testing.py NAME-OF-EXPERIMENT
 ```
