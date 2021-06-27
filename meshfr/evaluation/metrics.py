@@ -432,7 +432,11 @@ def generate_metirc_siamese_rank1(siamese, device, criterion, gallery_descriptor
     # print("ident", correct_identity_matrix.shape)  # [20, 480] or [80, 1920]
 
     result_matrix = siamese(datas1, datas2)
-    # loss = criterion(result_matrix, correct_identity_matrix.float())
+    
+    if criterion is not None:
+        loss = criterion(result_matrix, correct_identity_matrix.float()).item()
+    else:
+        loss = None
 
     # Make it [probe, gal]
     result_matrix = torch.transpose(result_matrix, 0, 1)
@@ -463,7 +467,8 @@ def generate_metirc_siamese_rank1(siamese, device, criterion, gallery_descriptor
     #             metrics.fp += 1
 
     # return loss.item(), generate_score_metric_from_base(metrics)
-    return None, generate_score_metric_from_base(metrics)
+
+    return loss, generate_score_metric_from_base(metrics)
 
 @torch.no_grad()
 def generate_metric_siamese(siamese, device, criterion, descriptor_dict, offload=False):
@@ -486,8 +491,8 @@ def generate_metric_siamese(siamese, device, criterion, descriptor_dict, offload
     assert indecies.shape[0] == labels_1d.shape[0]
 
     # Find indencies for all positive and negative pairs
-    indecies_pos = labels_1d.eq(1)
-    indecies_neg = labels_1d.eq(0)
+    # indecies_pos = labels_1d.eq(1)
+    # indecies_neg = labels_1d.eq(0)
 
     max_size = 100000
     splitted_desc1 = torch.split(datas[indecies[:, 0]], max_size)
@@ -504,7 +509,7 @@ def generate_metric_siamese(siamese, device, criterion, descriptor_dict, offload
 
 
     # correct = (pred>0.5).eq(labels_1d).sum().item()
-    total = pred.shape[0]
+    # total = pred.shape[0]
     # print("pred", pred.shape, "indecies_pos", indecies_pos.shape)  # 
     # print((pred[indecies_pos]>0.5).type)
     # print((labels_1d[indecies_pos]).type)
@@ -516,8 +521,7 @@ def generate_metric_siamese(siamese, device, criterion, descriptor_dict, offload
 
     # metric = BaseMetric(tp, fp, tn, fn)
     # return loss.item(), generate_score_metric_from_base(metric), pred, labels_1d.float()
-    metric = BaseMetric(0,0,0,0)
-    return 0,  generate_score_metric_from_base(metric), [], []
+    return loss
 
 import sklearn.metrics
 

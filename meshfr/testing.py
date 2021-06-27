@@ -234,7 +234,10 @@ class Siamese_part(torch.nn.Module):
         self.fc3 = Linear(64, 1)
 
     def forward(self, x1, x2):
-        x = torch.cat((x1, x2), dim=-1)  # Combine both descritors
+        # x = torch.cat((x1, x2), dim=-1)  # Combine both descritors
+        a = x1 - x2
+        b = torch.pow(a, 2)
+        x = torch.cat([a,b], dim = -1)
 
         x = F.relu(self.fc1(x))
         # x = F.relu(self.fc2(x))
@@ -474,9 +477,9 @@ def test_8_convnet_triplet():
 
     run_on_device = "cuda"
     assert run_on_device in ["cuda", "cpu"]
-    train_on = "bosp"
+    train_on = "frgc"
     assert train_on in ["bu3dfe", "bosp", "frgc", "bosp+frgc", "bu3dfe+bosp+frgc", "bu3dfe+bosp"]
-    siamese_network_type = "triplet"
+    siamese_network_type = "siamese"
     assert siamese_network_type in ["siamese", "triplet", "softmax"]
     assert siamese_network_type != "softmax" or "+" in train_on  # DO NOT MIX SOFTMAX AND DATASETS
     # Triplet or softmax sadly disables validation/training loss
@@ -487,8 +490,15 @@ def test_8_convnet_triplet():
     force = False
     sample = "bruteforce"  # 2pass, bruteforce, all or random
     sample_size = [1024*2, 1024*8][0]
-    num_workers_train = 10  # Maximum amount of dataloaders, may be overwritten if the batch size is less
-    # torch.multiprocessing.set_sharing_strategy('file_system')
+    num_workers_train = 0 #  # Maximum amount of dataloaders, may be overwritten if the batch size is less
+    # If you get: raise RuntimeError('received %d items of ancdata' %
+    # Try either fixing the ulimit  (ulimit -n 1048576)    or
+    # torch.multiprocessing.set_sharing_strategy('file_system')     or
+    # set num_workers_train to 0
+    if num_workers_train == 0:
+        print("Running dataloaders on single thread (safe)")
+    else:
+        print(f"Running dataloaders on multi-thread style (may crash)")
 
     def seed_worker(worker_id):
         worker_seed = torch.initial_seed() % 2**32
@@ -601,9 +611,9 @@ def test_8_convnet_triplet():
     # siam.load_state_dict(torch.load("./logging-siamese-1905-namechange-trash/2021-06-17_lr1e-03_batchsize6_testing-bosp-norm-t001-r5-axis012/model-siam-500.pt"))
     # start_epoch += 1000
 
-    print("loading save")
-    model.load_state_dict(torch.load("./logging-siamese-1905-namechange-trash/2021-06-26_lr1e-03_batchsize6_bsop-norm-translate001-rotate5-axis012-SIAMESE-fresh-full-net/model-2500.pt"))
-    start_epoch += 2500
+    # print("loading save")
+    # model.load_state_dict(torch.load("./logging-siamese-1905-namechange-trash/2021-06-26_lr1e-03_batchsize6_bsop-norm-translate001-rotate5-axis012-SIAMESE-fresh-full-net/model-2500.pt"))
+    # start_epoch += 2500
 
     # Siam is allowed to be empty
     optimizer = torch.optim.Adam(list(model.parameters()) + list(siam.parameters()), lr=1e-3)
@@ -664,6 +674,11 @@ def test_8_convnet_triplet():
             def generate_log_block(dataset_name, tag, dataloadr, gal_probe_split):
                 descriptor_dict = metrics.generate_descriptor_dict_from_dataloader(model=model, dataloader=dataloadr, device=device)
                 gallery_dict, probe_dict = gal_probe_split(descriptor_dict)
+
+                if criterion is not None:
+                    loss = metrics.generate_metric_siamese(siam, device, criterion, descriptor_dict, offload="frgc" in dataset_name)
+                    LOG.add_scalar(f"loss/{dataset_name}-siamese-verification-{tag}", loss, epoch)
+                    toprint[2].append(f"siamese-verification-{dataset_name}-{tag},\tloss:{loss:.3f}")
 
                 # Descriptor rank1
                 metric = metrics.get_metric_gallery_set_vs_probe_set(gallery_dict, probe_dict)
