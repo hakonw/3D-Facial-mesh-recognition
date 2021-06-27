@@ -13,6 +13,7 @@ If you want to install it in an existing venv, match the pytorch-geometric with 
 python -c "import torch; print(torch.version.cuda)"
 python -c "import torch; print(torch.__version__)"
 ```
+```
 conda create -n pytorch-geometric python=3.8 --yes
 conda activate pytorch-geometric
 # Standard pytorch install. Follow pytorch install instructions for latest
