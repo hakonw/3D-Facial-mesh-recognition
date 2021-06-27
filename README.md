@@ -60,9 +60,9 @@ Cuda 11.2 has issues has pytorch is skipping that cuda version.
 
 ```
 # To run it with logging, do
-python meshfr/testing.py NAME-OF-EXPERIMENT
+python meshfr/train.py NAME-OF-EXPERIMENT
 ```
-It can also be run without logging with `python meshfr/testing.py q`
+It can also be run without logging with `python meshfr/train.py q`
 
 
 
