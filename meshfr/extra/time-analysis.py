@@ -28,8 +28,8 @@ with torch.no_grad():
     print(device)
 
     # Load model
-    model = testing.TestNet55_descv2().to(device)
-    siam = testing.Siamese_part().to(device)
+    model = train.TestNet55_descv2().to(device)
+    siam = train.Siamese_part().to(device)
     print("Loading save")
     # model.load_state_dict(torch.load("./logging-siamese-1905-namechange-trash/2021-06-13_lr1e-03_batchsize10_testing-bu3dfe-norm-translate001-rotate5-axis012/model-6000.pt", map_location=device))
     # siam.load_state_dict(torch.load("./logging-siamese-1905-namechange-trash/2021-06-13_lr1e-03_batchsize10_testing-bu3dfe-norm-translate001-rotate5-axis012/model-siam-6000.pt", map_location=device))
