@@ -2,7 +2,7 @@ from numpy.lib.function_base import _parse_gufunc_signature
 import meshfr.datasets.datasetFRGC as datasetFRGC
 import torch
 import meshfr.evaluation.metrics as metrics
-import meshfr.testing as testing
+import meshfr.train as train
 from timeit import default_timer as timer
 from timeit import timeit
 from datetime import timedelta
